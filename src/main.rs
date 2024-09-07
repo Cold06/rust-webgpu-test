@@ -1,3 +1,6 @@
+mod canvas;
+
+use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use cgmath;
 use imgui::*;
@@ -14,6 +17,8 @@ use winit::{
     keyboard::{Key, NamedKey},
     window::WindowBuilder,
 };
+
+use crate::canvas::Canvas;
 
 #[rustfmt::skip]
 const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
@@ -41,55 +46,116 @@ struct ModelBundle {
     vertex_data: Vec<Vertex>,
     index_data: Vec<u16>,
 }
-fn create_vertices() -> ModelBundle {
-    #[rustfmt::skip]
-    let vertex_data = [
-        // top (0, 0, 1)
-        vertex([-1, -1, 1], [0, 0]),
-        vertex([ 1, -1, 1], [1, 0]),
-        vertex([ 1,  1, 1], [1, 1]),
-        vertex([-1,  1, 1], [0, 1]),
-        // bottom (0, 0, -1)
-        vertex([-1, 1,  -1], [1, 0]),
-        vertex([ 1,  1, -1], [0, 0]),
-        vertex([ 1, -1, -1], [0, 1]),
-        vertex([-1, -1, -1], [1, 1]),
-        // right (1, 0, 0)
-        vertex([ 1, -1, -1], [0, 0]),
-        vertex([ 1,  1, -1], [1, 0]),
-        vertex([ 1,  1,  1], [1, 1]),
-        vertex([ 1, -1,  1], [0, 1]),
-        // left (-1, 0, 0)
-        vertex([-1, -1,  1], [1, 0]),
-        vertex([-1,  1,  1], [0, 0]),
-        vertex([-1,  1, -1], [0, 1]),
-        vertex([-1, -1, -1], [1, 1]),
-        // front (0, 1, 0)
-        vertex([ 1,  1, -1], [1, 0]),
-        vertex([-1,  1, -1], [0, 0]),
-        vertex([-1,  1,  1], [0, 1]),
-        vertex([ 1,  1,  1], [1, 1]),
-        // back (0, -1, 0)
-        vertex([ 1, -1,  1], [0, 0]),
-        vertex([-1, -1 , 1], [1, 0]),
-        vertex([-1, -1, -1], [1, 1]),
-        vertex([ 1, -1, -1], [0, 1]),
-    ].to_vec();
 
-    #[rustfmt::skip]
-    let index_data = [
-         0,  1,  2,  2,  3,  0, // top
-         4,  5,  6,  6,  7,  4, // bottom
-         8,  9, 10, 10, 11,  8, // right
-        12, 13, 14, 14, 15, 12, // left
-        16, 17, 18, 18, 19, 16, // front
-        20, 21, 22, 22, 23, 20, // back
-    ].to_vec();
-
-    ModelBundle {
-        vertex_data,
-        index_data,
+#[rustfmt::skip]
+bitflags! {
+    struct BlockFaces: u32 {
+        const None    = 0b000000;
+        const Top     = 0b000001;
+        const Bottom  = 0b000010;
+        const Left    = 0b000100;
+        const Right   = 0b001000;
+        const Front   = 0b010000;
+        const Back    = 0b100000;
+        const All     = Self::Top.bits()
+                        | Self::Bottom.bits()
+                        | Self::Left.bits()
+                        | Self::Right.bits()
+                        | Self::Front.bits()
+                        | Self::Back.bits();
     }
+}
+
+fn create_vertices(faces: BlockFaces) -> ModelBundle {
+    let face_count = faces.bits().count_ones() as usize;
+
+    let mut bundle = ModelBundle {
+        vertex_data: Vec::with_capacity(face_count * 4),
+        index_data: Vec::with_capacity(face_count * 4),
+    };
+
+    let mut i_stack: u16 = 0;
+
+    let mut push_quad = || {
+        bundle.index_data.extend([
+            i_stack + 0,
+            i_stack + 1,
+            i_stack + 2,
+            i_stack + 2,
+            i_stack + 3,
+            i_stack + 0,
+        ]);
+
+        i_stack += 4;
+    };
+
+    if faces.contains(BlockFaces::Top) {
+        bundle.vertex_data.extend([
+            vertex([-1, -1, 1], [0, 0]),
+            vertex([1, -1, 1], [1, 0]),
+            vertex([1, 1, 1], [1, 1]),
+            vertex([-1, 1, 1], [0, 1]),
+        ]);
+
+        push_quad();
+    }
+
+    if faces.contains(BlockFaces::Bottom) {
+        bundle.vertex_data.extend([
+            vertex([-1, 1, -1], [1, 0]),
+            vertex([1, 1, -1], [0, 0]),
+            vertex([1, -1, -1], [0, 1]),
+            vertex([-1, -1, -1], [1, 1]),
+        ]);
+
+        push_quad();
+    }
+
+    if faces.contains(BlockFaces::Right) {
+        bundle.vertex_data.extend([
+            vertex([1, -1, -1], [0, 0]),
+            vertex([1, 1, -1], [1, 0]),
+            vertex([1, 1, 1], [1, 1]),
+            vertex([1, -1, 1], [0, 1]),
+        ]);
+
+        push_quad();
+    }
+
+    if faces.contains(BlockFaces::Left) {
+        bundle.vertex_data.extend([
+            vertex([-1, -1, 1], [1, 0]),
+            vertex([-1, 1, 1], [0, 0]),
+            vertex([-1, 1, -1], [0, 1]),
+            vertex([-1, -1, -1], [1, 1]),
+        ]);
+
+        push_quad();
+    }
+
+    if faces.contains(BlockFaces::Front) {
+        bundle.vertex_data.extend([
+            vertex([1, 1, -1], [1, 0]),
+            vertex([-1, 1, -1], [0, 0]),
+            vertex([-1, 1, 1], [0, 1]),
+            vertex([1, 1, 1], [1, 1]),
+        ]);
+
+        push_quad();
+    }
+
+    if faces.contains(BlockFaces::Back) {
+        bundle.vertex_data.extend([
+            vertex([1, -1, 1], [0, 0]),
+            vertex([-1, -1, 1], [1, 0]),
+            vertex([-1, -1, -1], [1, 1]),
+            vertex([1, -1, -1], [0, 1]),
+        ]);
+
+        push_quad();
+    }
+
+    bundle
 }
 
 fn create_texels(size: usize) -> Vec<u8> {
@@ -145,7 +211,9 @@ impl Example {
         queue: &wgpu::Queue,
     ) -> Self {
         let (vertex_buf, index_buf, index_count) = {
-            let prebuilt = create_vertices();
+            let mut faces = BlockFaces::All;
+            faces.remove(BlockFaces::Top);
+            let prebuilt = create_vertices(faces);
 
             let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Vertex Buffer"),
@@ -380,6 +448,31 @@ fn get_surface_configuration(size: PhysicalSize<u32>) -> wgpu::SurfaceConfigurat
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    {
+        use std::fs::File;
+        use std::io::Write;
+
+        let mut canvas = Canvas::new(300, 300);
+        canvas.scale(1.2, 1.2);
+        canvas.move_to(36.0, 48.0);
+        canvas.quad_to(660.0, 880.0, 100.0, 360.0);
+        canvas.translate(10.0, 10.0);
+        canvas.set_line_width(20.0);
+        canvas.stroke();
+        canvas.save();
+        canvas.move_to(30.0, 90.0);
+        canvas.line_to(110.0, 20.0);
+        canvas.line_to(240.0, 130.0);
+        canvas.line_to(60.0, 130.0);
+        canvas.line_to(190.0, 20.0);
+        canvas.line_to(270.0, 90.0);
+        canvas.fill();
+        let d = canvas.data();
+        let mut file = File::create("./out/test.png").unwrap();
+        let bytes = d.as_bytes();
+        file.write_all(bytes).unwrap();
+    }
+
     env_logger::init();
 
     // Set up window and GPU
@@ -480,122 +573,118 @@ fn main() -> Result<(), Box<dyn Error>> {
             Event::AboutToWait => {
                 window.request_redraw();
             }
-            Event::WindowEvent { ref event, .. } => {
-                match event {
-                    WindowEvent::Resized(size) => {
-                        let surface_desc = get_surface_configuration(*size);
+            Event::WindowEvent { ref event, .. } => match event {
+                WindowEvent::Resized(size) => {
+                    let surface_desc = get_surface_configuration(*size);
 
-                        surface.configure(&device, &surface_desc);
-                    }
-                    WindowEvent::CloseRequested => {
-                        window_target.exit();
-                    }
-                    WindowEvent::KeyboardInput { event, .. } => {
-                        if let Key::Named(NamedKey::Escape) = event.logical_key {
-                            if event.state.is_pressed() {
-                                window_target.exit();
-                            }
+                    surface.configure(&device, &surface_desc);
+                }
+                WindowEvent::CloseRequested => {
+                    window_target.exit();
+                }
+                WindowEvent::KeyboardInput { event, .. } => {
+                    if let Key::Named(NamedKey::Escape) = event.logical_key {
+                        if event.state.is_pressed() {
+                            window_target.exit();
                         }
                     }
-                    WindowEvent::RedrawRequested => {
-                        {
-                            let now = Instant::now();
-                            imgui.io_mut().update_delta_time(now - last_frame);
-                            last_frame = now;
+                }
+                WindowEvent::RedrawRequested => {
+                    {
+                        let now = Instant::now();
+                        imgui.io_mut().update_delta_time(now - last_frame);
+                        last_frame = now;
+                    }
+
+                    platform
+                        .prepare_frame(imgui.io_mut(), &window)
+                        .expect("Failed to prepare frame");
+
+                    let frame = match surface.get_current_texture() {
+                        Ok(frame) => frame,
+                        Err(e) => {
+                            eprintln!("dropped frame: {e:?}");
+                            return;
                         }
+                    };
 
-                        platform
-                            .prepare_frame(imgui.io_mut(), &window)
-                            .expect("Failed to prepare frame");
+                    let view = frame
+                        .texture
+                        .create_view(&wgpu::TextureViewDescriptor::default());
 
-                        let frame = match surface.get_current_texture() {
-                            Ok(frame) => frame,
-                            Err(e) => {
-                                eprintln!("dropped frame: {e:?}");
-                                return;
-                            }
-                        };
+                    let ui = imgui.frame();
+                    example.update(ui.io().delta_time);
+                    example.setup_camera(&queue, ui.io().display_size);
+                    example.render(&view, &device, &queue);
 
-                        let view = frame
-                            .texture
-                            .create_view(&wgpu::TextureViewDescriptor::default());
+                    let mut new_example_size: Option<[f32; 2]> = None;
 
-                        let ui = imgui.frame();
-                        example.update(ui.io().delta_time);
-                        example.setup_camera(&queue, ui.io().display_size);
-                        example.render(&view, &device, &queue);
+                    ui.window("Cube")
+                        .size([512.0, 512.0], Condition::FirstUseEver)
+                        .build(|| {
+                            new_example_size = Some(ui.content_region_avail());
+                            Image::new(example_texture_id, new_example_size.unwrap()).build(ui);
+                        });
 
-                        let mut new_example_size: Option<[f32; 2]> = None;
-
-                        ui.window("Cube")
-                            .size([512.0, 512.0], Condition::FirstUseEver)
-                            .build(|| {
-                                new_example_size = Some(ui.content_region_avail());
-                                Image::new(example_texture_id, new_example_size.unwrap()).build(ui);
-                            });
-
-                        if let Some(size) = new_example_size {
-                            if size != example_size && size[0] >= 1.0 && size[1] >= 1.0 {
-                                example_size = size;
-                                let scale = &ui.io().display_framebuffer_scale;
-                                let texture_config = TextureConfig {
-                                    size: Extent3d {
-                                        width: (example_size[0] * scale[0]) as u32,
-                                        height: (example_size[1] * scale[1]) as u32,
-                                        ..Default::default()
-                                    },
-                                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                                        | wgpu::TextureUsages::TEXTURE_BINDING,
+                    if let Some(size) = new_example_size {
+                        if size != example_size && size[0] >= 1.0 && size[1] >= 1.0 {
+                            example_size = size;
+                            let scale = &ui.io().display_framebuffer_scale;
+                            let texture_config = TextureConfig {
+                                size: Extent3d {
+                                    width: (example_size[0] * scale[0]) as u32,
+                                    height: (example_size[1] * scale[1]) as u32,
                                     ..Default::default()
-                                };
-                                renderer.textures.replace(
-                                    example_texture_id,
-                                    Texture::new(&device, &renderer, texture_config),
-                                );
-                            }
-
-                            example.setup_camera(&queue, size);
-                            example.render(
-                                renderer.textures.get(example_texture_id).unwrap().view(),
-                                &device,
-                                &queue,
+                                },
+                                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                                    | wgpu::TextureUsages::TEXTURE_BINDING,
+                                ..Default::default()
+                            };
+                            renderer.textures.replace(
+                                example_texture_id,
+                                Texture::new(&device, &renderer, texture_config),
                             );
                         }
 
-                        let mut encoder: wgpu::CommandEncoder =
-                            device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                                label: None,
-                            });
-
-                        platform.prepare_render(ui, &window);
-
-                        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                            label: None,
-                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                view: &view,
-                                resolve_target: None,
-                                ops: wgpu::Operations {
-                                    load: wgpu::LoadOp::Load,
-                                    store: wgpu::StoreOp::Store,
-                                },
-                            })],
-                            depth_stencil_attachment: None,
-                            timestamp_writes: None,
-                            occlusion_query_set: None,
-                        });
-
-                        renderer
-                            .render(imgui.render(), &queue, &device, &mut pass)
-                            .expect("Rendering failed");
-
-                        drop(pass);
-
-                        queue.submit(Some(encoder.finish()));
-                        frame.present();
+                        example.setup_camera(&queue, size);
+                        example.render(
+                            renderer.textures.get(example_texture_id).unwrap().view(),
+                            &device,
+                            &queue,
+                        );
                     }
-                    _ => {}
+
+                    let mut encoder: wgpu::CommandEncoder = device
+                        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+                    platform.prepare_render(ui, &window);
+
+                    let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: None,
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Load,
+                                store: wgpu::StoreOp::Store,
+                            },
+                        })],
+                        depth_stencil_attachment: None,
+                        timestamp_writes: None,
+                        occlusion_query_set: None,
+                    });
+
+                    renderer
+                        .render(imgui.render(), &queue, &device, &mut pass)
+                        .expect("Rendering failed");
+
+                    drop(pass);
+
+                    queue.submit(Some(encoder.finish()));
+                    frame.present();
                 }
-            }
+                _ => {}
+            },
             _ => {}
         }
 

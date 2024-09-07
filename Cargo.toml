@@ -13,3 +13,6 @@ bytemuck = { version = "1.13", features = ["derive"] }
 pollster = "0.3"
 cgmath = "0.18"
 env_logger = "0.10"
+skia-safe = {version = "0.75.0", features = ["textlayout"]}
+rquickjs = {version = "0.6.2", features = ["macro", "rust-alloc", "loader", "dyn-load"]}
+bitflags = "2.6"
