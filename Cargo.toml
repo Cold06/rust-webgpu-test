@@ -1,0 +1,15 @@
+[package]
+name = "mc-renderer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wgpu = "0.19"
+winit = "0.29"
+imgui = "0.12"
+imgui-wgpu = { git = "https://github.com/mkrasnitski/imgui-wgpu-rs.git", branch = "master" }
+imgui-winit-support = "0.12"
+bytemuck = { version = "1.13", features = ["derive"] }
+pollster = "0.3"
+cgmath = "0.18"
+env_logger = "0.10"
