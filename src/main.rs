@@ -32,20 +32,16 @@ use winit::{
 fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
 
-    // Window
     let event_loop = EventLoop::new()?;
 
-    // GPU
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: wgpu::Backends::PRIMARY,
         ..Default::default()
     });
 
-    // Window
     let size = LogicalSize::new(1280.0, 720.0);
     let mut window = OSWindow::new(&event_loop, &instance, size);
 
-    // GPU
     let adapter = block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
         power_preference: wgpu::PowerPreference::HighPerformance,
         compatible_surface: Some(&window.surface),
@@ -53,14 +49,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     }))
     .unwrap();
 
-    // GPU
     let (device, queue) =
         block_on(adapter.request_device(&wgpu::DeviceDescriptor::default(), None)).unwrap();
 
-    // GPU + Window
     window.init_configuration(&device);
 
-    // GUI
     let mut gui = Gui::new(
         &window.window,
         &device,
@@ -68,7 +61,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         window.surface_configuration.format,
     );
 
-    // Example
     let size = window.window.inner_size();
     let mut example = Example::init(
         &window.surface_configuration,

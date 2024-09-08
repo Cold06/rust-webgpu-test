@@ -1,3 +1,4 @@
+use std::mem::offset_of;
 use crate::camera::Camera;
 use crate::camera_controller::CameraController;
 use crate::cube::{create_vertices, BlockFaces, Vertex};
@@ -36,21 +37,21 @@ impl Example {
         let camera_controller_debug = CameraController::new(4.0, 0.004);
 
         let (vertex_buf, index_buf, index_count) = {
-            let prebuilt = create_vertices(BlockFaces::All);
+            let model = create_vertices(BlockFaces::All);
 
             let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Vertex Buffer"),
-                contents: bytemuck::cast_slice(&prebuilt.vertex_data),
+                contents: bytemuck::cast_slice(&model.vertex_data),
                 usage: wgpu::BufferUsages::VERTEX,
             });
 
             let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Index Buffer"),
-                contents: bytemuck::cast_slice(&prebuilt.index_data),
+                contents: bytemuck::cast_slice(&model.index_data),
                 usage: wgpu::BufferUsages::INDEX,
             });
 
-            (vertex_buf, index_buf, prebuilt.index_data.len())
+            (vertex_buf, index_buf, model.index_data.len())
         };
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -131,9 +132,9 @@ impl Example {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Linear,
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Nearest,
             ..Default::default()
         });
 
@@ -165,13 +166,18 @@ impl Example {
                 attributes: &[
                     wgpu::VertexAttribute {
                         format: wgpu::VertexFormat::Float32x4,
-                        offset: 0,
+                        offset: offset_of!(Vertex, pos) as u64,
                         shader_location: 0,
                     },
                     wgpu::VertexAttribute {
-                        format: wgpu::VertexFormat::Float32x2,
-                        offset: 4 * 4,
+                        format: wgpu::VertexFormat::Float32x4,
+                        offset: offset_of!(Vertex, normal) as u64,
                         shader_location: 1,
+                    },
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32x2,
+                        offset: offset_of!(Vertex, tex_coord) as u64,
+                        shader_location: 2,
                     },
                 ],
             }];

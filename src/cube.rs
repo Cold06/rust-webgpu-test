@@ -4,13 +4,15 @@ use bytemuck::{Pod, Zeroable};
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub struct Vertex {
-    pos: [f32; 4],
-    tex_coord: [f32; 2],
+    pub pos: [f32; 4],
+    pub normal: [f32; 4],
+    pub tex_coord: [f32; 2],
 }
 
-fn vertex(pos: [i8; 3], tc: [i8; 2]) -> Vertex {
+fn vertex(pos: [i8; 3], normal: [i8; 3], tc: [i8; 2]) -> Vertex {
     Vertex {
         pos: [pos[0] as f32, pos[1] as f32, pos[2] as f32, 1.0],
+        normal: [normal[0] as f32, normal[1] as f32, normal[2] as f32, 0.0],
         tex_coord: [tc[0] as f32, tc[1] as f32],
     }
 }
@@ -64,10 +66,10 @@ pub fn create_vertices(faces: BlockFaces) -> ModelBundle {
 
     if faces.contains(BlockFaces::Right) {
         bundle.vertex_data.extend([
-            vertex([-1, -1, 1], [0, 0]),
-            vertex([1, -1, 1], [1, 0]),
-            vertex([1, 1, 1], [1, 1]),
-            vertex([-1, 1, 1], [0, 1]),
+            vertex([-1, -1, 1], [0, 0, 1], [0, 0]),
+            vertex([1, -1, 1], [0, 0, 1], [1, 0]),
+            vertex([1, 1, 1], [0, 0, 1], [1, 1]),
+            vertex([-1, 1, 1], [0, 0, 1], [0, 1]),
         ]);
 
         push_quad();
@@ -75,10 +77,10 @@ pub fn create_vertices(faces: BlockFaces) -> ModelBundle {
 
     if faces.contains(BlockFaces::Left) {
         bundle.vertex_data.extend([
-            vertex([-1, 1, -1], [1, 0]),
-            vertex([1, 1, -1], [0, 0]),
-            vertex([1, -1, -1], [0, 1]),
-            vertex([-1, -1, -1], [1, 1]),
+            vertex([-1, 1, -1], [0, 0, -1], [1, 0]),
+            vertex([1, 1, -1], [0, 0, -1], [0, 0]),
+            vertex([1, -1, -1], [0, 0, -1], [0, 1]),
+            vertex([-1, -1, -1], [0, 0, -1], [1, 1]),
         ]);
 
         push_quad();
@@ -86,10 +88,10 @@ pub fn create_vertices(faces: BlockFaces) -> ModelBundle {
 
     if faces.contains(BlockFaces::Back) {
         bundle.vertex_data.extend([
-            vertex([1, -1, -1], [0, 0]),
-            vertex([1, 1, -1], [1, 0]),
-            vertex([1, 1, 1], [1, 1]),
-            vertex([1, -1, 1], [0, 1]),
+            vertex([1, -1, -1], [1, 0, 0], [0, 0]),
+            vertex([1, 1, -1], [1, 0, 0], [1, 0]),
+            vertex([1, 1, 1], [1, 0, 0], [1, 1]),
+            vertex([1, -1, 1], [1, 0, 0], [0, 1]),
         ]);
 
         push_quad();
@@ -97,10 +99,10 @@ pub fn create_vertices(faces: BlockFaces) -> ModelBundle {
 
     if faces.contains(BlockFaces::Front) {
         bundle.vertex_data.extend([
-            vertex([-1, -1, 1], [1, 0]),
-            vertex([-1, 1, 1], [0, 0]),
-            vertex([-1, 1, -1], [0, 1]),
-            vertex([-1, -1, -1], [1, 1]),
+            vertex([-1, -1, 1], [-1, 0, 0], [1, 0]),
+            vertex([-1, 1, 1], [-1, 0, 0], [0, 0]),
+            vertex([-1, 1, -1], [-1, 0, 0], [0, 1]),
+            vertex([-1, -1, -1], [-1, 0, 0], [1, 1]),
         ]);
 
         push_quad();
@@ -108,10 +110,10 @@ pub fn create_vertices(faces: BlockFaces) -> ModelBundle {
 
     if faces.contains(BlockFaces::Top) {
         bundle.vertex_data.extend([
-            vertex([1, 1, -1], [1, 0]),
-            vertex([-1, 1, -1], [0, 0]),
-            vertex([-1, 1, 1], [0, 1]),
-            vertex([1, 1, 1], [1, 1]),
+            vertex([1, 1, -1], [0, 1, 0], [1, 0]),
+            vertex([-1, 1, -1], [0, 1, 0], [0, 0]),
+            vertex([-1, 1, 1], [0, 1, 0], [0, 1]),
+            vertex([1, 1, 1], [0, 1, 0], [1, 1]),
         ]);
 
         push_quad();
@@ -119,10 +121,10 @@ pub fn create_vertices(faces: BlockFaces) -> ModelBundle {
 
     if faces.contains(BlockFaces::Bottom) {
         bundle.vertex_data.extend([
-            vertex([1, -1, 1], [0, 0]),
-            vertex([-1, -1, 1], [1, 0]),
-            vertex([-1, -1, -1], [1, 1]),
-            vertex([1, -1, -1], [0, 1]),
+            vertex([1, -1, 1], [0, -1, 0], [0, 0]),
+            vertex([-1, -1, 1], [0, -1, 0], [1, 0]),
+            vertex([-1, -1, -1], [0, -1, 0], [1, 1]),
+            vertex([1, -1, -1], [0, -1, 0], [0, 1]),
         ]);
 
         push_quad();

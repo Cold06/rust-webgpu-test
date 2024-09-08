@@ -2,7 +2,7 @@ use std::mem;
 
 use skia_safe::{
     surfaces, AlphaType, Color, ColorType, Data, EncodedImageFormat, ImageInfo, Paint, PaintStyle,
-    Path, Surface,
+    Path, Rect, Surface,
 };
 
 pub struct Canvas {
@@ -81,6 +81,39 @@ impl Canvas {
     pub fn stroke(&mut self) {
         self.paint.set_style(PaintStyle::Stroke);
         self.surface.canvas().draw_path(&self.path, &self.paint);
+    }
+
+    #[inline]
+    pub fn set_fill_color(&mut self, color: Color) {
+        self.paint.set_color(color);
+    }
+
+    #[inline]
+    pub fn fill_rect(&mut self, left: f32, top: f32, right: f32, bottom: f32) {
+        self.paint.set_style(PaintStyle::Fill);
+        self.surface.canvas().draw_rect(
+            Rect {
+                left,
+                bottom,
+                right,
+                top,
+            },
+            &self.paint,
+        );
+    }
+
+    #[inline]
+    pub fn stroke_rect(&mut self, left: f32, top: f32, right: f32, bottom: f32) {
+        self.paint.set_style(PaintStyle::Stroke);
+        self.surface.canvas().draw_rect(
+            Rect {
+                left,
+                bottom,
+                right,
+                top,
+            },
+            &self.paint,
+        );
     }
 
     #[inline]
