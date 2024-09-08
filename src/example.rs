@@ -1,13 +1,14 @@
 use crate::camera::Camera;
 use crate::camera_controller::CameraController;
-use crate::cube::{create_vertices, BlockFaces, Vertex};
+use crate::chunk::Chunk;
+use crate::cube::Vertex;
 use crate::gpu_utils::build_depth_texture;
-use crate::multimath::{Mat4, Vec2, Vec3, Vec4};
+use crate::multimath::{Mat4, Vec2, Vec3};
 use crate::paint_utils::create_texels;
+use imgui::Key::P;
 use std::mem::offset_of;
 use wgpu::util::DeviceExt;
-use wgpu::BindGroupDescriptor;
-use crate::chunk::Chunk;
+use wgpu::Device;
 
 pub struct Example {
     chunks: Vec<Chunk>,
@@ -21,8 +22,8 @@ pub struct Example {
     pub camera_controller_debug: CameraController,
     pub camera: Camera,
     pub camera_debug: Camera,
+    pub last_spawn_x: i32,
 }
-
 
 impl Example {
     pub fn init(
@@ -34,12 +35,9 @@ impl Example {
         let camera = Camera::new(Vec3::new(), Vec2::new(), size.0, size.1);
         let camera_debug = Camera::new(Vec3::new(), Vec2::new(), size.0, size.1);
 
-        let camera_controller = CameraController::new(4.0, 0.004);
+        let camera_controller = CameraController::new(20.0, 0.004);
         let camera_controller_debug = CameraController::new(4.0, 0.004);
-
-
-
-        let chunk = Chunk::new(&device);
+        let chunk = Chunk::new(&device, 0, 0);
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
@@ -153,12 +151,12 @@ impl Example {
                 attributes: &[
                     wgpu::VertexAttribute {
                         format: wgpu::VertexFormat::Float32x4,
-                        offset: offset_of!(Vertex, pos) as u64,
+                        offset: offset_of![Vertex, pos] as u64,
                         shader_location: 0,
                     },
                     wgpu::VertexAttribute {
                         format: wgpu::VertexFormat::Float32x4,
-                        offset: offset_of!(Vertex, normal) as u64,
+                        offset: offset_of! {Vertex, normal} as u64,
                         shader_location: 1,
                     },
                     wgpu::VertexAttribute {
@@ -209,6 +207,7 @@ impl Example {
         let depth_texture_1 = build_depth_texture(device, (512u32, 512u32));
 
         Example {
+            last_spawn_x: 1,
             chunks: vec![chunk],
             bind_group,
             uniform_buffer: uniform_buf,
@@ -220,6 +219,15 @@ impl Example {
             camera_controller_debug,
             depth_texture_main: depth_texture_0,
             depth_texture_secondary: depth_texture_1,
+        }
+    }
+
+    pub fn spawn_chunk(&mut self, device: &Device) {
+        for x in 0..16 {
+            for y in 0..16 {
+                let chunk = Chunk::new(device, x, y);
+                self.chunks.push(chunk);
+            }
         }
     }
 
@@ -275,7 +283,7 @@ impl Example {
                     pass.set_pipeline(&self.pipeline);
                     pass.set_bind_group(0, &self.bind_group, &[]);
                     pass.set_bind_group(1, &chunk.bind_group, &[]);
-                    pass.set_index_buffer(chunk.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                    pass.set_index_buffer(chunk.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
                     pass.set_vertex_buffer(0, chunk.vertex_buffer.slice(..));
                 }
                 pass.pop_debug_group();

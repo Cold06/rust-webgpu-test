@@ -1,9 +1,6 @@
 use std::mem;
 
-use skia_safe::{
-    surfaces, AlphaType, Color, ColorType, Data, EncodedImageFormat, ImageInfo, Paint, PaintStyle,
-    Path, Rect, Surface,
-};
+use skia_safe::{surfaces, AlphaType, Color, Color4f, ColorType, Data, EncodedImageFormat, ImageInfo, Paint, PaintStyle, Path, Rect, Surface};
 
 pub struct Canvas {
     surface: Surface,
@@ -86,6 +83,11 @@ impl Canvas {
     #[inline]
     pub fn set_fill_color(&mut self, color: Color) {
         self.paint.set_color(color);
+    }
+
+    #[inline]
+    pub fn set_color(&mut self, color: Color4f) {
+        self.paint.set_color(color.to_color());
     }
 
     #[inline]

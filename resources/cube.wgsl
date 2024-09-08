@@ -47,5 +47,5 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var diffuse: f32 = max(dot(norm, lightDir), 0.0);
     var brightness: f32 = max(0.5, diffuse);
 
-    return textureSample(r_color, r_sampler, in.tex_coord) * brightness;
+    return vec4<f32>(textureSample(r_color, r_sampler, in.tex_coord).rgb * brightness, 1.0);
 }

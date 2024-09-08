@@ -2,6 +2,7 @@ mod camera;
 mod camera_controller;
 mod camera_utils;
 mod canvas;
+mod chunk;
 mod cube;
 mod example;
 mod gpu;
@@ -10,7 +11,6 @@ mod gui;
 mod multimath;
 mod paint_utils;
 mod window;
-mod chunk;
 
 use crate::camera_utils::process_camera_input;
 use crate::example::Example;
@@ -191,6 +191,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                         .build(|| {
                             new_example_size = Some(ui.content_region_avail());
                             Image::new(example_texture_id, new_example_size.unwrap()).build(ui);
+                        });
+
+                    ui.window("Chunk Manager")
+                        .size([170.0, 260.0], Condition::FirstUseEver)
+                        .build(|| {
+                            if ui.button("Spawn Chunk") {
+                                example.spawn_chunk(&device);
+                            }
                         });
 
                     ui.window("Camera")
