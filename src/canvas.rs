@@ -1,6 +1,9 @@
 use std::mem;
 
-use skia_safe::{surfaces, Color, Data, EncodedImageFormat, Paint, PaintStyle, Path, Surface};
+use skia_safe::{
+    surfaces, AlphaType, Color, ColorType, Data, EncodedImageFormat, ImageInfo, Paint, PaintStyle,
+    Path, Surface,
+};
 
 pub struct Canvas {
     surface: Surface,
@@ -91,13 +94,38 @@ impl Canvas {
         self.paint.set_stroke_width(width);
     }
 
-    #[inline]
-    pub fn data(&mut self) -> Data {
+    pub fn as_png_data(&mut self) -> Data {
         let image = self.surface.image_snapshot();
         let mut context = self.surface.direct_context();
         image
             .encode(context.as_mut(), EncodedImageFormat::PNG, None)
             .unwrap()
+    }
+
+    pub fn as_bytes(&mut self) -> Result<Vec<u8>, &'static str> {
+        let (width, height) = (self.surface.width(), self.surface.height());
+        let image_info = ImageInfo::new(
+            (width, height),
+            ColorType::RGBA8888,
+            AlphaType::Premul,
+            None,
+        );
+        let image_row_size = (width * 4) as usize;
+        let image_size = (width * height * 4) as usize;
+        let mut pixel_data = vec![0u8; image_size];
+        let success = self.surface.read_pixels(
+            &image_info,
+            pixel_data.as_mut_slice(),
+            image_row_size,
+            (0, 0),
+        );
+
+        if !success {
+            eprintln!("Failed to read pixels from the surface.");
+            return Err("Failed to read pixels from the surface.");
+        }
+
+        Ok(pixel_data)
     }
 
     #[inline]

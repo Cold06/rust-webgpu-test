@@ -159,25 +159,22 @@ fn create_vertices(faces: BlockFaces) -> ModelBundle {
 }
 
 fn create_texels(size: usize) -> Vec<u8> {
-    let range = 0..size * size;
-
-    range
-        .map(|id| {
-            let cx = 3.0 * (id % size) as f32 / (size - 1) as f32 - 2.0;
-            let cy = 2.0 * (id / size) as f32 / (size - 1) as f32 - 1.0;
-
-            let (mut x, mut y, mut count) = (cx, cy, 0);
-
-            while count < 0xFF && x * x + y * y < 4.0 {
-                let old_x = x;
-                x = x * x - y * y + cx;
-                y = 2.0 * old_x * y + cy;
-                count += 1;
-            }
-
-            count
-        })
-        .collect()
+    let mut canvas = Canvas::new(size as i32, size as i32);
+    canvas.scale(1.2, 1.2);
+    canvas.move_to(36.0, 48.0);
+    canvas.quad_to(660.0, 880.0, 100.0, 360.0);
+    canvas.translate(10.0, 10.0);
+    canvas.set_line_width(20.0);
+    canvas.stroke();
+    canvas.save();
+    canvas.move_to(30.0, 90.0);
+    canvas.line_to(110.0, 20.0);
+    canvas.line_to(240.0, 130.0);
+    canvas.line_to(60.0, 130.0);
+    canvas.line_to(190.0, 20.0);
+    canvas.line_to(270.0, 90.0);
+    canvas.fill();
+    canvas.as_bytes().unwrap()
 }
 
 struct Example {
@@ -248,9 +245,15 @@ impl Example {
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Texture {
                         multisampled: false,
-                        sample_type: wgpu::TextureSampleType::Uint,
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
                         view_dimension: wgpu::TextureViewDimension::D2,
                     },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
                 },
             ],
@@ -272,9 +275,9 @@ impl Example {
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::R8Uint,
+                format: wgpu::TextureFormat::Rgba8Unorm,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                view_formats: &[wgpu::TextureFormat::R8Uint],
+                view_formats: &[wgpu::TextureFormat::Rgba8Unorm],
             });
 
             queue.write_texture(
@@ -282,7 +285,7 @@ impl Example {
                 &texels,
                 wgpu::ImageDataLayout {
                     offset: 0,
-                    bytes_per_row: Some(fractal_size),
+                    bytes_per_row: Some(fractal_size * 4),
                     rows_per_image: None,
                 },
                 texture_extent,
@@ -302,6 +305,17 @@ impl Example {
             })
         };
 
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("Texture sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
+        });
+
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &bind_group_layout,
             entries: &[
@@ -312,6 +326,10 @@ impl Example {
                 wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::TextureView(&texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
                 },
             ],
             label: None,
@@ -448,31 +466,6 @@ fn get_surface_configuration(size: PhysicalSize<u32>) -> wgpu::SurfaceConfigurat
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    {
-        use std::fs::File;
-        use std::io::Write;
-
-        let mut canvas = Canvas::new(300, 300);
-        canvas.scale(1.2, 1.2);
-        canvas.move_to(36.0, 48.0);
-        canvas.quad_to(660.0, 880.0, 100.0, 360.0);
-        canvas.translate(10.0, 10.0);
-        canvas.set_line_width(20.0);
-        canvas.stroke();
-        canvas.save();
-        canvas.move_to(30.0, 90.0);
-        canvas.line_to(110.0, 20.0);
-        canvas.line_to(240.0, 130.0);
-        canvas.line_to(60.0, 130.0);
-        canvas.line_to(190.0, 20.0);
-        canvas.line_to(270.0, 90.0);
-        canvas.fill();
-        let d = canvas.data();
-        let mut file = File::create("./out/test.png").unwrap();
-        let bytes = d.as_bytes();
-        file.write_all(bytes).unwrap();
-    }
-
     env_logger::init();
 
     // Set up window and GPU
