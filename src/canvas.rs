@@ -94,6 +94,7 @@ impl Canvas {
         self.paint.set_stroke_width(width);
     }
 
+    #[allow(dead_code)]
     pub fn as_png_data(&mut self) -> Data {
         let image = self.surface.image_snapshot();
         let mut context = self.surface.direct_context();

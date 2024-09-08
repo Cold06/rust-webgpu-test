@@ -1,5 +1,12 @@
+mod camera;
+mod camera_controller;
 mod canvas;
+mod multimath;
 
+use crate::camera::Camera;
+use crate::camera_controller::CameraController;
+use crate::canvas::Canvas;
+use crate::multimath::{Vec2, Vec3};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use cgmath;
@@ -10,15 +17,14 @@ use std::error::Error;
 use std::time::Instant;
 use wgpu::{include_wgsl, util::DeviceExt, Extent3d};
 use winit::dpi::PhysicalSize;
+use winit::window::CursorGrabMode;
 use winit::{
     dpi::LogicalSize,
-    event::{Event, WindowEvent},
+    event::{DeviceEvent, ElementState, Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     keyboard::{Key, NamedKey},
     window::WindowBuilder,
 };
-
-use crate::canvas::Canvas;
 
 #[rustfmt::skip]
 const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
@@ -185,6 +191,8 @@ struct Example {
     uniform_buffer: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
     time: f32,
+    camera_controller: CameraController,
+    camera: Camera,
 }
 
 impl Example {
@@ -206,10 +214,17 @@ impl Example {
         config: &wgpu::SurfaceConfiguration,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
+        size: (f32, f32),
     ) -> Self {
+        let camera = Camera::new(Vec3::new(), Vec2::new(), size.0, size.1);
+
+        let camera_controller = CameraController::new(4.0, 0.004);
+
         let (vertex_buf, index_buf, index_count) = {
             let mut faces = BlockFaces::All;
+
             faces.remove(BlockFaces::Top);
+
             let prebuilt = create_vertices(faces);
 
             let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -392,6 +407,8 @@ impl Example {
             uniform_buffer: uniform_buf,
             pipeline,
             time: 0.0,
+            camera,
+            camera_controller,
         }
     }
 
@@ -399,7 +416,7 @@ impl Example {
         self.time += delta_time;
     }
 
-    fn setup_camera(&mut self, queue: &wgpu::Queue, size: [f32; 2]) {
+    fn setup_static_camera(&mut self, queue: &wgpu::Queue, size: [f32; 2]) {
         let main_matrix = Self::generate_matrix(size[0] / size[1]);
         let main_matrix_ref: &[f32; 16] = main_matrix.as_ref();
 
@@ -407,6 +424,14 @@ impl Example {
             &self.uniform_buffer,
             0,
             bytemuck::cast_slice(main_matrix_ref),
+        );
+    }
+
+    fn setup_dynamic_camera(&self, queue: &wgpu::Queue) {
+        queue.write_buffer(
+            &self.uniform_buffer,
+            0,
+            bytemuck::bytes_of(&self.camera.matrix),
         );
     }
 
@@ -462,6 +487,28 @@ fn get_surface_configuration(size: PhysicalSize<u32>) -> wgpu::SurfaceConfigurat
         desired_maximum_frame_latency: 2,
         alpha_mode: wgpu::CompositeAlphaMode::Auto,
         view_formats: vec![wgpu::TextureFormat::Bgra8Unorm],
+    }
+}
+
+fn process_camera_input(focused: bool, event: Event<()>, camera_controller: &mut CameraController) {
+    if !focused {
+        return;
+    }
+
+    match event {
+        Event::WindowEvent { event, .. } => match event {
+            WindowEvent::KeyboardInput { event, .. } => {
+                camera_controller.process_keyboard(event.physical_key, event.state);
+            }
+            _ => {}
+        },
+        Event::DeviceEvent { event, .. } => match event {
+            DeviceEvent::MouseMotion { delta } => {
+                camera_controller.process_mouse(delta.0, delta.1);
+            }
+            _ => {}
+        },
+        _ => {}
     }
 }
 
@@ -541,7 +588,15 @@ fn main() -> Result<(), Box<dyn Error>> {
             ..Default::default()
         },
     );
-    let mut example = Example::init(&surface_configuration, &device, &queue);
+
+    let size = window.inner_size();
+
+    let mut example = Example::init(
+        &surface_configuration,
+        &device,
+        &queue,
+        (size.width as f32, size.height as f32),
+    );
 
     let example_texture_id = {
         let texture_config = TextureConfig {
@@ -559,8 +614,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         renderer.textures.insert(texture)
     };
 
+    let mut focused = false;
+
     event_loop.run(|event, window_target| {
         window_target.set_control_flow(ControlFlow::Poll);
+
+        let imgui_io = imgui.io();
+        let imgui_wants_mouse = imgui_io.want_capture_mouse;
+
+        process_camera_input(focused, event.clone(), &mut example.camera_controller);
 
         match event {
             Event::AboutToWait => {
@@ -571,6 +633,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                     let surface_desc = get_surface_configuration(*size);
 
                     surface.configure(&device, &surface_desc);
+
+                    example.camera.resize(size.width as f32, size.height as f32);
                 }
                 WindowEvent::CloseRequested => {
                     window_target.exit();
@@ -578,16 +642,34 @@ fn main() -> Result<(), Box<dyn Error>> {
                 WindowEvent::KeyboardInput { event, .. } => {
                     if let Key::Named(NamedKey::Escape) = event.logical_key {
                         if event.state.is_pressed() {
-                            window_target.exit();
+                            window.set_cursor_grab(CursorGrabMode::None).unwrap();
+                            window.set_cursor_visible(true);
+                            focused = false;
                         }
                     }
                 }
-                WindowEvent::RedrawRequested => {
-                    {
-                        let now = Instant::now();
-                        imgui.io_mut().update_delta_time(now - last_frame);
-                        last_frame = now;
+                WindowEvent::MouseInput {
+                    state: ElementState::Pressed,
+                    button: winit::event::MouseButton::Left,
+                    ..
+                } => {
+                    if !imgui_wants_mouse {
+                        window.set_cursor_grab(CursorGrabMode::Locked).unwrap();
+                        window.set_cursor_visible(false);
+                        focused = true;
                     }
+                }
+                WindowEvent::RedrawRequested => {
+                    let now = Instant::now();
+                    let delta = now - last_frame;
+                    last_frame = now;
+
+                    imgui.io_mut().update_delta_time(delta);
+
+                    example
+                        .camera_controller
+                        .update_camera(&mut example.camera, delta);
+                    example.camera.compute();
 
                     platform
                         .prepare_frame(imgui.io_mut(), &window)
@@ -607,7 +689,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                     let ui = imgui.frame();
                     example.update(ui.io().delta_time);
-                    example.setup_camera(&queue, ui.io().display_size);
+                    example.setup_dynamic_camera(&queue);
                     example.render(&view, &device, &queue);
 
                     let mut new_example_size: Option<[f32; 2]> = None;
@@ -617,6 +699,16 @@ fn main() -> Result<(), Box<dyn Error>> {
                         .build(|| {
                             new_example_size = Some(ui.content_region_avail());
                             Image::new(example_texture_id, new_example_size.unwrap()).build(ui);
+                        });
+
+                    ui.window("Camera")
+                        .size([512.0, 512.0], Condition::FirstUseEver)
+                        .build(|| {
+                            ui.text(format!("X {}", example.camera.view.position.x));
+                            ui.text(format!("Y {}", example.camera.view.position.y));
+                            ui.text(format!("Z {}", example.camera.view.position.z));
+                            ui.text(format!("Pitch {}", example.camera.view.yaw_pitch.x));
+                            ui.text(format!("Yaw {}", example.camera.view.yaw_pitch.y));
                         });
 
                     if let Some(size) = new_example_size {
@@ -639,7 +731,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                             );
                         }
 
-                        example.setup_camera(&queue, size);
+                        example.setup_static_camera(&queue, size);
                         example.render(
                             renderer.textures.get(example_texture_id).unwrap().view(),
                             &device,
