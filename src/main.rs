@@ -194,7 +194,9 @@ struct Example {
     depth_texture_secondary: wgpu::Texture,
     time: f32,
     camera_controller: CameraController,
+    camera_controller_debug: CameraController,
     camera: Camera,
+    camera_debug: Camera,
 }
 
 fn build_depth_texture(device: &Device, size: (u32, u32)) -> wgpu::Texture {
@@ -236,8 +238,10 @@ impl Example {
         size: (f32, f32),
     ) -> Self {
         let camera = Camera::new(Vec3::new(), Vec2::new(), size.0, size.1);
+        let camera_debug = Camera::new(Vec3::new(), Vec2::new(), size.0, size.1);
 
         let camera_controller = CameraController::new(4.0, 0.004);
+        let camera_controller_debug = CameraController::new(4.0, 0.004);
 
         let (vertex_buf, index_buf, index_count) = {
             let mut faces = BlockFaces::All;
@@ -438,7 +442,9 @@ impl Example {
             pipeline,
             time: 0.0,
             camera,
+            camera_debug,
             camera_controller,
+            camera_controller_debug,
             depth_texture_main: depth_texture_0,
             depth_texture_secondary: depth_texture_1,
         }
@@ -459,11 +465,11 @@ impl Example {
         );
     }
 
-    fn setup_dynamic_camera(&self, queue: &wgpu::Queue) {
+    fn setup_dynamic_camera(&self, queue: &wgpu::Queue, camera: &Camera) {
         queue.write_buffer(
             &self.uniform_buffer,
             0,
-            bytemuck::bytes_of(&self.camera.matrix),
+            bytemuck::bytes_of(&camera.matrix),
         );
     }
 
@@ -661,13 +667,19 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut focused = false;
 
+    let mut use_debug_camera = false;
+
     event_loop.run(|event, window_target| {
         window_target.set_control_flow(ControlFlow::Poll);
 
         let imgui_io = imgui.io();
         let imgui_wants_mouse = imgui_io.want_capture_mouse;
 
-        process_camera_input(focused, event.clone(), &mut example.camera_controller);
+        if use_debug_camera {
+            process_camera_input(focused, event.clone(), &mut example.camera_controller_debug);
+        } else {
+            process_camera_input(focused, event.clone(), &mut example.camera_controller);
+        }
 
         match event {
             Event::AboutToWait => {
@@ -695,6 +707,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                             focused = false;
                         }
                     }
+
+                    if let Key::Named(NamedKey::Tab) = event.logical_key {
+                        if event.state.is_pressed() {
+                            use_debug_camera = !use_debug_camera;
+                        }
+                    }
                 }
                 WindowEvent::MouseInput {
                     state: ElementState::Pressed,
@@ -717,6 +735,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     example
                         .camera_controller
                         .update_camera(&mut example.camera, delta);
+
                     example.camera.compute();
 
                     platform
@@ -741,7 +760,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                     let ui = imgui.frame();
                     example.update(ui.io().delta_time);
-                    example.setup_dynamic_camera(&queue);
+                    example.setup_dynamic_camera(&queue, &example.camera);
                     example.render(&view, &main_depth_view, &device, &queue);
 
                     let mut new_example_size: Option<[f32; 2]> = None;
@@ -756,11 +775,18 @@ fn main() -> Result<(), Box<dyn Error>> {
                     ui.window("Camera")
                         .size([512.0, 512.0], Condition::FirstUseEver)
                         .build(|| {
-                            ui.text(format!("X {}", example.camera.view.position.x));
-                            ui.text(format!("Y {}", example.camera.view.position.y));
-                            ui.text(format!("Z {}", example.camera.view.position.z));
-                            ui.text(format!("Pitch {}", example.camera.view.yaw_pitch.x));
-                            ui.text(format!("Yaw {}", example.camera.view.yaw_pitch.y));
+                            ui.text("Main Camera");
+                            ui.text(format!("   X {}", example.camera.view.position.x));
+                            ui.text(format!("   Y {}", example.camera.view.position.y));
+                            ui.text(format!("   Z {}", example.camera.view.position.z));
+                            ui.text(format!("   Pitch {}", example.camera.view.yaw_pitch.x));
+                            ui.text(format!("   Yaw {}", example.camera.view.yaw_pitch.y));
+                            ui.text("Debug Camera");
+                            ui.text(format!("   X {}", example.camera_debug.view.position.x));
+                            ui.text(format!("   Y {}", example.camera_debug.view.position.y));
+                            ui.text(format!("   Z {}", example.camera_debug.view.position.z));
+                            ui.text(format!("   Pitch {}", example.camera_debug.view.yaw_pitch.x));
+                            ui.text(format!("   Yaw {}", example.camera_debug.view.yaw_pitch.y));
                         });
 
                     if let Some(size) = new_example_size {
@@ -782,6 +808,11 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 Texture::new(&device, &renderer, texture_config),
                             );
 
+                            example.camera_debug.resize(
+                                example_size[0] * scale[0],
+                                example_size[1] * scale[1]
+                            );
+
                             example.depth_texture_secondary = build_depth_texture(
                                 &device,
                                 (
@@ -791,7 +822,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                             );
                         }
 
-                        example.setup_static_camera(&queue, size);
+                        example
+                            .camera_controller_debug
+                            .update_camera(&mut example.camera_debug, delta);
+                        example.camera_debug.compute();
+                        example.setup_dynamic_camera(&queue, &example.camera_debug);
+
                         example.render(
                             renderer.textures.get(example_texture_id).unwrap().view(),
                             &example
