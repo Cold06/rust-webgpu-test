@@ -4,12 +4,20 @@ struct VertexOutput {
     @builtin(position) position: vec4<f32>,
 };
 
+struct PerInstance {
+    position: vec4<f32>,
+};
+
+
 struct Locals {
     transform: mat4x4<f32>,
 };
 
 @group(0) @binding(0)
 var<uniform> locals: Locals;
+
+@group(1) @binding(0)
+var<uniform> perInstance: PerInstance;
 
 @vertex
 fn vs_main(
@@ -19,7 +27,7 @@ fn vs_main(
 ) -> VertexOutput {
     var out: VertexOutput;
     out.tex_coord = tex_coord;
-    out.position = locals.transform * position;
+    out.position = locals.transform * vec4<f32>(position.xyz + perInstance.position.xyz, 1.0);
     out.normal = normal.xyz;
     return out;
 }

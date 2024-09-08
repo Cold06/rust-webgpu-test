@@ -10,6 +10,7 @@ mod gui;
 mod multimath;
 mod paint_utils;
 mod window;
+mod chunk;
 
 use crate::camera_utils::process_camera_input;
 use crate::example::Example;

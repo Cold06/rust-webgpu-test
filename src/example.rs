@@ -1,16 +1,16 @@
-use std::mem::offset_of;
 use crate::camera::Camera;
 use crate::camera_controller::CameraController;
 use crate::cube::{create_vertices, BlockFaces, Vertex};
 use crate::gpu_utils::build_depth_texture;
-use crate::multimath::{Mat4, Vec2, Vec3};
+use crate::multimath::{Mat4, Vec2, Vec3, Vec4};
 use crate::paint_utils::create_texels;
+use std::mem::offset_of;
 use wgpu::util::DeviceExt;
+use wgpu::BindGroupDescriptor;
+use crate::chunk::Chunk;
 
 pub struct Example {
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
-    index_count: usize,
+    chunks: Vec<Chunk>,
     bind_group: wgpu::BindGroup,
     uniform_buffer: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
@@ -22,6 +22,7 @@ pub struct Example {
     pub camera: Camera,
     pub camera_debug: Camera,
 }
+
 
 impl Example {
     pub fn init(
@@ -36,23 +37,9 @@ impl Example {
         let camera_controller = CameraController::new(4.0, 0.004);
         let camera_controller_debug = CameraController::new(4.0, 0.004);
 
-        let (vertex_buf, index_buf, index_count) = {
-            let model = create_vertices(BlockFaces::All);
 
-            let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Vertex Buffer"),
-                contents: bytemuck::cast_slice(&model.vertex_data),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
 
-            let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Index Buffer"),
-                contents: bytemuck::cast_slice(&model.index_data),
-                usage: wgpu::BufferUsages::INDEX,
-            });
-
-            (vertex_buf, index_buf, model.index_data.len())
-        };
+        let chunk = Chunk::new(&device);
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
@@ -184,7 +171,7 @@ impl Example {
 
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: None,
-                bind_group_layouts: &[&bind_group_layout],
+                bind_group_layouts: &[&bind_group_layout, &Chunk::get_bind_group_layout(&device)],
                 push_constant_ranges: &[],
             });
 
@@ -222,9 +209,7 @@ impl Example {
         let depth_texture_1 = build_depth_texture(device, (512u32, 512u32));
 
         Example {
-            vertex_buffer: vertex_buf,
-            index_buffer: index_buf,
-            index_count,
+            chunks: vec![chunk],
             bind_group,
             uniform_buffer: uniform_buf,
             pipeline,
@@ -284,17 +269,19 @@ impl Example {
                 occlusion_query_set: None,
             });
 
-            pass.push_debug_group("Prepare data for draw.");
-            {
-                pass.set_pipeline(&self.pipeline);
-                pass.set_bind_group(0, &self.bind_group, &[]);
-                pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-                pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            for chunk in &self.chunks {
+                pass.push_debug_group("Prepare data for draw.");
+                {
+                    pass.set_pipeline(&self.pipeline);
+                    pass.set_bind_group(0, &self.bind_group, &[]);
+                    pass.set_bind_group(1, &chunk.bind_group, &[]);
+                    pass.set_index_buffer(chunk.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                    pass.set_vertex_buffer(0, chunk.vertex_buffer.slice(..));
+                }
+                pass.pop_debug_group();
+                pass.insert_debug_marker("Draw!");
+                pass.draw_indexed(0..chunk.index_count as u32, 0, 0..1);
             }
-            pass.pop_debug_group();
-
-            pass.insert_debug_marker("Draw!");
-            pass.draw_indexed(0..self.index_count as u32, 0, 0..1);
         }
 
         queue.submit(Some(encoder.finish()));
