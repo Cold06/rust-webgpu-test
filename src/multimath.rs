@@ -26,6 +26,7 @@ impl Debug for Mat4 {
 }
 
 impl Mat4 {
+    #[rustfmt::skip]
     pub fn new() -> Self {
         Self([
             1.0, 0.0, 0.0, 0.0,

@@ -6,33 +6,23 @@ mod multimath;
 use crate::camera::Camera;
 use crate::camera_controller::CameraController;
 use crate::canvas::Canvas;
-use crate::multimath::{Vec2, Vec3};
+use crate::multimath::{Mat4, Vec2, Vec3};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use cgmath;
 use imgui::*;
-use imgui_wgpu::{Renderer, RendererConfig, Texture, TextureConfig};
+use imgui_wgpu;
 use pollster::block_on;
 use std::error::Error;
 use std::time::Instant;
-use wgpu::{include_wgsl, util::DeviceExt, Device, Extent3d};
-use winit::dpi::PhysicalSize;
-use winit::window::CursorGrabMode;
+use wgpu::util::DeviceExt;
 use winit::{
-    dpi::LogicalSize,
+    dpi::{LogicalSize, PhysicalSize},
     event::{DeviceEvent, ElementState, Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     keyboard::{Key, NamedKey},
-    window::WindowBuilder,
+    window::{CursorGrabMode, WindowBuilder},
 };
-
-#[rustfmt::skip]
-const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
-    1.0, 0.0, 0.0, 0.0,
-    0.0, 1.0, 0.0, 0.0,
-    0.0, 0.0, 0.5, 0.0,
-    0.0, 0.0, 0.5, 1.0,
-);
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -97,10 +87,10 @@ fn create_vertices(faces: BlockFaces) -> ModelBundle {
 
     if faces.contains(BlockFaces::Right) {
         bundle.vertex_data.extend([
-            vertex([-1, -1,  1], [0, 0]),
-            vertex([ 1, -1,  1], [1, 0]),
-            vertex([ 1,  1,  1], [1, 1]),
-            vertex([-1,  1,  1], [0, 1]),
+            vertex([-1, -1, 1], [0, 0]),
+            vertex([1, -1, 1], [1, 0]),
+            vertex([1, 1, 1], [1, 1]),
+            vertex([-1, 1, 1], [0, 1]),
         ]);
 
         push_quad();
@@ -108,9 +98,9 @@ fn create_vertices(faces: BlockFaces) -> ModelBundle {
 
     if faces.contains(BlockFaces::Left) {
         bundle.vertex_data.extend([
-            vertex([-1,  1, -1], [1, 0]),
-            vertex([ 1,  1, -1], [0, 0]),
-            vertex([ 1, -1, -1], [0, 1]),
+            vertex([-1, 1, -1], [1, 0]),
+            vertex([1, 1, -1], [0, 0]),
+            vertex([1, -1, -1], [0, 1]),
             vertex([-1, -1, -1], [1, 1]),
         ]);
 
@@ -120,9 +110,9 @@ fn create_vertices(faces: BlockFaces) -> ModelBundle {
     if faces.contains(BlockFaces::Back) {
         bundle.vertex_data.extend([
             vertex([1, -1, -1], [0, 0]),
-            vertex([1,  1, -1], [1, 0]),
-            vertex([1,  1,  1], [1, 1]),
-            vertex([1, -1,  1], [0, 1]),
+            vertex([1, 1, -1], [1, 0]),
+            vertex([1, 1, 1], [1, 1]),
+            vertex([1, -1, 1], [0, 1]),
         ]);
 
         push_quad();
@@ -130,9 +120,9 @@ fn create_vertices(faces: BlockFaces) -> ModelBundle {
 
     if faces.contains(BlockFaces::Front) {
         bundle.vertex_data.extend([
-            vertex([-1, -1,  1], [1, 0]),
-            vertex([-1,  1,  1], [0, 0]),
-            vertex([-1,  1, -1], [0, 1]),
+            vertex([-1, -1, 1], [1, 0]),
+            vertex([-1, 1, 1], [0, 0]),
+            vertex([-1, 1, -1], [0, 1]),
             vertex([-1, -1, -1], [1, 1]),
         ]);
 
@@ -141,10 +131,10 @@ fn create_vertices(faces: BlockFaces) -> ModelBundle {
 
     if faces.contains(BlockFaces::Top) {
         bundle.vertex_data.extend([
-            vertex([ 1,  1, -1], [1, 0]),
-            vertex([-1,  1, -1], [0, 0]),
-            vertex([-1,  1,  1], [0, 1]),
-            vertex([ 1,  1,  1], [1, 1]),
+            vertex([1, 1, -1], [1, 0]),
+            vertex([-1, 1, -1], [0, 0]),
+            vertex([-1, 1, 1], [0, 1]),
+            vertex([1, 1, 1], [1, 1]),
         ]);
 
         push_quad();
@@ -152,10 +142,10 @@ fn create_vertices(faces: BlockFaces) -> ModelBundle {
 
     if faces.contains(BlockFaces::Bottom) {
         bundle.vertex_data.extend([
-            vertex([ 1, -1,  1], [0, 0]),
-            vertex([-1, -1,  1], [1, 0]),
+            vertex([1, -1, 1], [0, 0]),
+            vertex([-1, -1, 1], [1, 0]),
             vertex([-1, -1, -1], [1, 1]),
-            vertex([ 1, -1, -1], [0, 1]),
+            vertex([1, -1, -1], [0, 1]),
         ]);
 
         push_quad();
@@ -199,12 +189,12 @@ struct Example {
     camera_debug: Camera,
 }
 
-fn build_depth_texture(device: &Device, size: (u32, u32)) -> wgpu::Texture {
+fn build_depth_texture(device: &wgpu::Device, size: (u32, u32)) -> wgpu::Texture {
     device.create_texture(&wgpu::TextureDescriptor {
         label: Some("Main depth texture"),
-        size: Extent3d {
-            width: size.0 as u32,
-            height: size.1 as u32,
+        size: wgpu::Extent3d {
+            width: size.0,
+            height: size.1,
             depth_or_array_layers: 1,
         },
         format: wgpu::TextureFormat::Depth32Float,
@@ -217,20 +207,6 @@ fn build_depth_texture(device: &Device, size: (u32, u32)) -> wgpu::Texture {
 }
 
 impl Example {
-    fn generate_matrix(aspect_ratio: f32) -> cgmath::Matrix4<f32> {
-        use cgmath::*;
-
-        let projection = perspective(Deg(45f32), aspect_ratio, 1.0, 10.0);
-
-        let view = Matrix4::look_at_rh(
-            Point3::new(3.0, 0.0, 3.0),
-            Point3::new(0.0, 0.0, 0.0),
-            Vector3::unit_y(),
-        );
-
-        OPENGL_TO_WGPU_MATRIX * projection * view
-    }
-
     fn init(
         config: &wgpu::SurfaceConfiguration,
         device: &wgpu::Device,
@@ -297,7 +273,7 @@ impl Example {
             let fractal_size = 256u32;
             let texels = create_texels(fractal_size as usize);
 
-            let texture_extent = Extent3d {
+            let texture_extent = wgpu::Extent3d {
                 width: fractal_size,
                 height: fractal_size,
                 depth_or_array_layers: 1,
@@ -328,16 +304,11 @@ impl Example {
             texture.create_view(&wgpu::TextureViewDescriptor::default())
         };
 
-        let uniform_buf = {
-            let main_matrix = Self::generate_matrix(config.width as f32 / config.height as f32);
-            let main_matrix_ref: &[f32; 16] = main_matrix.as_ref();
-
-            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Uniform Buffer"),
-                contents: bytemuck::cast_slice(main_matrix_ref),
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            })
-        };
+        let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Uniform Buffer"),
+            contents: bytemuck::bytes_of(&Mat4::new()),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("Texture sampler"),
@@ -370,7 +341,7 @@ impl Example {
         });
 
         let pipeline = {
-            let shader = device.create_shader_module(include_wgsl!("../resources/cube.wgsl"));
+            let shader = device.create_shader_module(wgpu::include_wgsl!("../resources/cube.wgsl"));
 
             let vertex_buffers = [wgpu::VertexBufferLayout {
                 array_stride: size_of::<Vertex>() as wgpu::BufferAddress,
@@ -449,23 +420,8 @@ impl Example {
         self.time += delta_time;
     }
 
-    fn setup_static_camera(&mut self, queue: &wgpu::Queue, size: [f32; 2]) {
-        let main_matrix = Self::generate_matrix(size[0] / size[1]);
-        let main_matrix_ref: &[f32; 16] = main_matrix.as_ref();
-
-        queue.write_buffer(
-            &self.uniform_buffer,
-            0,
-            bytemuck::cast_slice(main_matrix_ref),
-        );
-    }
-
     fn setup_dynamic_camera(&self, queue: &wgpu::Queue, camera: &Camera) {
-        queue.write_buffer(
-            &self.uniform_buffer,
-            0,
-            bytemuck::bytes_of(&camera.matrix),
-        );
+        queue.write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(&camera.matrix));
     }
 
     fn render(
@@ -590,16 +546,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let (device, queue) =
         block_on(adapter.request_device(&wgpu::DeviceDescriptor::default(), None)).unwrap();
 
-    // Set up swap chain
     let size = window.inner_size();
     let surface_configuration = get_surface_configuration(size);
-
     surface.configure(&device, &surface_configuration);
 
-    // Set up dear imgui
     let mut imgui = Context::create();
     imgui.set_ini_filename(None);
-
     let mut platform = imgui_winit_support::WinitPlatform::init(&mut imgui);
     platform.attach_window(
         imgui.io_mut(),
@@ -623,20 +575,20 @@ fn main() -> Result<(), Box<dyn Error>> {
         }]);
     }
 
-    let mut last_frame = Instant::now();
-    let mut example_size: [f32; 2] = [640.0, 480.0];
-    let mut renderer = Renderer::new(
+    // Requires font setup
+    let mut renderer = imgui_wgpu::Renderer::new(
         &mut imgui,
         &device,
         &queue,
-        RendererConfig {
+        imgui_wgpu::RendererConfig {
             texture_format: surface_configuration.format,
             ..Default::default()
         },
     );
 
+    let mut last_frame = Instant::now();
+    let mut example_size: [f32; 2] = [640.0, 480.0];
     let size = window.inner_size();
-
     let mut example = Example::init(
         &surface_configuration,
         &device,
@@ -645,8 +597,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     );
 
     let example_texture_id = {
-        let texture_config = TextureConfig {
-            size: Extent3d {
+        let texture_config = imgui_wgpu::TextureConfig {
+            size: wgpu::Extent3d {
                 width: example_size[0] as u32,
                 height: example_size[1] as u32,
                 ..Default::default()
@@ -654,9 +606,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             ..Default::default()
         };
-
-        let texture = Texture::new(&device, &renderer, texture_config);
-
+        let texture = imgui_wgpu::Texture::new(&device, &renderer, texture_config);
         renderer.textures.insert(texture)
     };
 
@@ -771,17 +721,26 @@ fn main() -> Result<(), Box<dyn Error>> {
                         .size([170.0, 260.0], Condition::FirstUseEver)
                         .position([1070.0, 12.0], Condition::FirstUseEver)
                         .build(|| {
-                            ui.text(format!("Main Camera {}", if !use_debug_camera { "(active)" } else { "" }));
+                            ui.text(format!(
+                                "Main Camera {}",
+                                if !use_debug_camera { "(active)" } else { "" }
+                            ));
                             ui.text(format!("   X {}", example.camera.view.position.x));
                             ui.text(format!("   Y {}", example.camera.view.position.y));
                             ui.text(format!("   Z {}", example.camera.view.position.z));
                             ui.text(format!("   Pitch {}", example.camera.view.yaw_pitch.x));
                             ui.text(format!("   Yaw {}", example.camera.view.yaw_pitch.y));
-                            ui.text(format!("Debug Camera {}", if use_debug_camera { "(active)" } else { "" }));
+                            ui.text(format!(
+                                "Debug Camera {}",
+                                if use_debug_camera { "(active)" } else { "" }
+                            ));
                             ui.text(format!("   X {}", example.camera_debug.view.position.x));
                             ui.text(format!("   Y {}", example.camera_debug.view.position.y));
                             ui.text(format!("   Z {}", example.camera_debug.view.position.z));
-                            ui.text(format!("   Pitch {}", example.camera_debug.view.yaw_pitch.x));
+                            ui.text(format!(
+                                "   Pitch {}",
+                                example.camera_debug.view.yaw_pitch.x
+                            ));
                             ui.text(format!("   Yaw {}", example.camera_debug.view.yaw_pitch.y));
                         });
 
@@ -789,8 +748,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                         if size != example_size && size[0] >= 1.0 && size[1] >= 1.0 {
                             example_size = size;
                             let scale = &ui.io().display_framebuffer_scale;
-                            let texture_config = TextureConfig {
-                                size: Extent3d {
+                            let texture_config = imgui_wgpu::TextureConfig {
+                                size: wgpu::Extent3d {
                                     width: (example_size[0] * scale[0]) as u32,
                                     height: (example_size[1] * scale[1]) as u32,
                                     ..Default::default()
@@ -801,13 +760,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                             };
                             renderer.textures.replace(
                                 example_texture_id,
-                                Texture::new(&device, &renderer, texture_config),
+                                imgui_wgpu::Texture::new(&device, &renderer, texture_config),
                             );
 
-                            example.camera_debug.resize(
-                                example_size[0] * scale[0],
-                                example_size[1] * scale[1]
-                            );
+                            example
+                                .camera_debug
+                                .resize(example_size[0] * scale[0], example_size[1] * scale[1]);
 
                             example.depth_texture_secondary = build_depth_texture(
                                 &device,
