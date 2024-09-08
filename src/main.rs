@@ -95,34 +95,12 @@ fn create_vertices(faces: BlockFaces) -> ModelBundle {
         i_stack += 4;
     };
 
-    if faces.contains(BlockFaces::Top) {
-        bundle.vertex_data.extend([
-            vertex([-1, -1, 1], [0, 0]),
-            vertex([1, -1, 1], [1, 0]),
-            vertex([1, 1, 1], [1, 1]),
-            vertex([-1, 1, 1], [0, 1]),
-        ]);
-
-        push_quad();
-    }
-
-    if faces.contains(BlockFaces::Bottom) {
-        bundle.vertex_data.extend([
-            vertex([-1, 1, -1], [1, 0]),
-            vertex([1, 1, -1], [0, 0]),
-            vertex([1, -1, -1], [0, 1]),
-            vertex([-1, -1, -1], [1, 1]),
-        ]);
-
-        push_quad();
-    }
-
     if faces.contains(BlockFaces::Right) {
         bundle.vertex_data.extend([
-            vertex([1, -1, -1], [0, 0]),
-            vertex([1, 1, -1], [1, 0]),
-            vertex([1, 1, 1], [1, 1]),
-            vertex([1, -1, 1], [0, 1]),
+            vertex([-1, -1,  1], [0, 0]),
+            vertex([ 1, -1,  1], [1, 0]),
+            vertex([ 1,  1,  1], [1, 1]),
+            vertex([-1,  1,  1], [0, 1]),
         ]);
 
         push_quad();
@@ -130,21 +108,10 @@ fn create_vertices(faces: BlockFaces) -> ModelBundle {
 
     if faces.contains(BlockFaces::Left) {
         bundle.vertex_data.extend([
-            vertex([-1, -1, 1], [1, 0]),
-            vertex([-1, 1, 1], [0, 0]),
-            vertex([-1, 1, -1], [0, 1]),
+            vertex([-1,  1, -1], [1, 0]),
+            vertex([ 1,  1, -1], [0, 0]),
+            vertex([ 1, -1, -1], [0, 1]),
             vertex([-1, -1, -1], [1, 1]),
-        ]);
-
-        push_quad();
-    }
-
-    if faces.contains(BlockFaces::Front) {
-        bundle.vertex_data.extend([
-            vertex([1, 1, -1], [1, 0]),
-            vertex([-1, 1, -1], [0, 0]),
-            vertex([-1, 1, 1], [0, 1]),
-            vertex([1, 1, 1], [1, 1]),
         ]);
 
         push_quad();
@@ -152,10 +119,43 @@ fn create_vertices(faces: BlockFaces) -> ModelBundle {
 
     if faces.contains(BlockFaces::Back) {
         bundle.vertex_data.extend([
-            vertex([1, -1, 1], [0, 0]),
-            vertex([-1, -1, 1], [1, 0]),
+            vertex([1, -1, -1], [0, 0]),
+            vertex([1,  1, -1], [1, 0]),
+            vertex([1,  1,  1], [1, 1]),
+            vertex([1, -1,  1], [0, 1]),
+        ]);
+
+        push_quad();
+    }
+
+    if faces.contains(BlockFaces::Front) {
+        bundle.vertex_data.extend([
+            vertex([-1, -1,  1], [1, 0]),
+            vertex([-1,  1,  1], [0, 0]),
+            vertex([-1,  1, -1], [0, 1]),
             vertex([-1, -1, -1], [1, 1]),
-            vertex([1, -1, -1], [0, 1]),
+        ]);
+
+        push_quad();
+    }
+
+    if faces.contains(BlockFaces::Top) {
+        bundle.vertex_data.extend([
+            vertex([ 1,  1, -1], [1, 0]),
+            vertex([-1,  1, -1], [0, 0]),
+            vertex([-1,  1,  1], [0, 1]),
+            vertex([ 1,  1,  1], [1, 1]),
+        ]);
+
+        push_quad();
+    }
+
+    if faces.contains(BlockFaces::Bottom) {
+        bundle.vertex_data.extend([
+            vertex([ 1, -1,  1], [0, 0]),
+            vertex([-1, -1,  1], [1, 0]),
+            vertex([-1, -1, -1], [1, 1]),
+            vertex([ 1, -1, -1], [0, 1]),
         ]);
 
         push_quad();
@@ -244,12 +244,7 @@ impl Example {
         let camera_controller_debug = CameraController::new(4.0, 0.004);
 
         let (vertex_buf, index_buf, index_count) = {
-            let mut faces = BlockFaces::All;
-
-            faces.remove(BlockFaces::Top);
-            faces.remove(BlockFaces::Bottom);
-
-            let prebuilt = create_vertices(faces);
+            let prebuilt = create_vertices(BlockFaces::All);
 
             let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Vertex Buffer"),
@@ -773,15 +768,16 @@ fn main() -> Result<(), Box<dyn Error>> {
                         });
 
                     ui.window("Camera")
-                        .size([512.0, 512.0], Condition::FirstUseEver)
+                        .size([170.0, 260.0], Condition::FirstUseEver)
+                        .position([1070.0, 12.0], Condition::FirstUseEver)
                         .build(|| {
-                            ui.text("Main Camera");
+                            ui.text(format!("Main Camera {}", if !use_debug_camera { "(active)" } else { "" }));
                             ui.text(format!("   X {}", example.camera.view.position.x));
                             ui.text(format!("   Y {}", example.camera.view.position.y));
                             ui.text(format!("   Z {}", example.camera.view.position.z));
                             ui.text(format!("   Pitch {}", example.camera.view.yaw_pitch.x));
                             ui.text(format!("   Yaw {}", example.camera.view.yaw_pitch.y));
-                            ui.text("Debug Camera");
+                            ui.text(format!("Debug Camera {}", if use_debug_camera { "(active)" } else { "" }));
                             ui.text(format!("   X {}", example.camera_debug.view.position.x));
                             ui.text(format!("   Y {}", example.camera_debug.view.position.y));
                             ui.text(format!("   Z {}", example.camera_debug.view.position.z));
