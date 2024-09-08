@@ -15,7 +15,7 @@ use imgui_wgpu::{Renderer, RendererConfig, Texture, TextureConfig};
 use pollster::block_on;
 use std::error::Error;
 use std::time::Instant;
-use wgpu::{include_wgsl, util::DeviceExt, Extent3d};
+use wgpu::{include_wgsl, util::DeviceExt, Device, Extent3d};
 use winit::dpi::PhysicalSize;
 use winit::window::CursorGrabMode;
 use winit::{
@@ -190,9 +190,28 @@ struct Example {
     bind_group: wgpu::BindGroup,
     uniform_buffer: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
+    depth_texture_main: wgpu::Texture,
+    depth_texture_secondary: wgpu::Texture,
     time: f32,
     camera_controller: CameraController,
     camera: Camera,
+}
+
+fn build_depth_texture(device: &Device, size: (u32, u32)) -> wgpu::Texture {
+    device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("Main depth texture"),
+        size: Extent3d {
+            width: size.0 as u32,
+            height: size.1 as u32,
+            depth_or_array_layers: 1,
+        },
+        format: wgpu::TextureFormat::Depth32Float,
+        dimension: wgpu::TextureDimension::D2,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        mip_level_count: 1,
+        sample_count: 1,
+        view_formats: &[wgpu::TextureFormat::Depth32Float],
+    })
 }
 
 impl Example {
@@ -202,9 +221,9 @@ impl Example {
         let projection = perspective(Deg(45f32), aspect_ratio, 1.0, 10.0);
 
         let view = Matrix4::look_at_rh(
-            Point3::new(1.5f32, -5.0, 3.0),
-            Point3::new(0f32, 0.0, 0.0),
-            Vector3::unit_z(),
+            Point3::new(3.0, 0.0, 3.0),
+            Point3::new(0.0, 0.0, 0.0),
+            Vector3::unit_y(),
         );
 
         OPENGL_TO_WGPU_MATRIX * projection * view
@@ -224,6 +243,7 @@ impl Example {
             let mut faces = BlockFaces::All;
 
             faces.remove(BlockFaces::Top);
+            faces.remove(BlockFaces::Bottom);
 
             let prebuilt = create_vertices(faces);
 
@@ -390,14 +410,24 @@ impl Example {
                     targets: &[Some(config.format.into())],
                 }),
                 primitive: wgpu::PrimitiveState {
-                    cull_mode: Some(wgpu::Face::Back),
+                    cull_mode: None,
                     ..Default::default()
                 },
-                depth_stencil: None,
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: wgpu::TextureFormat::Depth32Float,
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState::default(),
+                    depth_write_enabled: true,
+                    depth_compare: wgpu::CompareFunction::Less,
+                }),
                 multisample: wgpu::MultisampleState::default(),
                 multiview: None,
             })
         };
+
+        let depth_texture_0 = build_depth_texture(device, (size.0 as u32, size.1 as u32));
+
+        let depth_texture_1 = build_depth_texture(device, (512u32, 512u32));
 
         Example {
             vertex_buffer: vertex_buf,
@@ -409,6 +439,8 @@ impl Example {
             time: 0.0,
             camera,
             camera_controller,
+            depth_texture_main: depth_texture_0,
+            depth_texture_secondary: depth_texture_1,
         }
     }
 
@@ -435,7 +467,13 @@ impl Example {
         );
     }
 
-    fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
+    fn render(
+        &mut self,
+        color_view: &wgpu::TextureView,
+        depth_view: &wgpu::TextureView,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
@@ -443,7 +481,7 @@ impl Example {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view,
+                    view: color_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -455,7 +493,14 @@ impl Example {
                         store: wgpu::StoreOp::Store,
                     },
                 })],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: depth_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
@@ -632,6 +677,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                 WindowEvent::Resized(size) => {
                     let surface_desc = get_surface_configuration(*size);
 
+                    example.depth_texture_main =
+                        build_depth_texture(&device, (size.width, size.height));
+
                     surface.configure(&device, &surface_desc);
 
                     example.camera.resize(size.width as f32, size.height as f32);
@@ -687,10 +735,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                         .texture
                         .create_view(&wgpu::TextureViewDescriptor::default());
 
+                    let main_depth_view = example
+                        .depth_texture_main
+                        .create_view(&wgpu::TextureViewDescriptor::default());
+
                     let ui = imgui.frame();
                     example.update(ui.io().delta_time);
                     example.setup_dynamic_camera(&queue);
-                    example.render(&view, &device, &queue);
+                    example.render(&view, &main_depth_view, &device, &queue);
 
                     let mut new_example_size: Option<[f32; 2]> = None;
 
@@ -729,11 +781,22 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 example_texture_id,
                                 Texture::new(&device, &renderer, texture_config),
                             );
+
+                            example.depth_texture_secondary = build_depth_texture(
+                                &device,
+                                (
+                                    (example_size[0] * scale[0]) as u32,
+                                    (example_size[1] * scale[1]) as u32,
+                                ),
+                            );
                         }
 
                         example.setup_static_camera(&queue, size);
                         example.render(
                             renderer.textures.get(example_texture_id).unwrap().view(),
+                            &example
+                                .depth_texture_secondary
+                                .create_view(&wgpu::TextureViewDescriptor::default()),
                             &device,
                             &queue,
                         );
