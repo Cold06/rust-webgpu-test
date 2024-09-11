@@ -1,5 +1,6 @@
 use crate::camera::Camera;
 use crate::multimath::{Vec2, Vec3};
+use cgmath::num_traits::clamp;
 use std::f32::consts::FRAC_PI_2;
 use std::time::Duration;
 use winit::event::*;
@@ -33,6 +34,10 @@ impl CameraController {
             sensitivity,
             yaw_pitch: Vec2 { x: 0.0, y: 0.0 },
         }
+    }
+
+    pub fn copy_camera_rotation(&mut self, camera: &Camera) {
+        self.yaw_pitch = camera.view.yaw_pitch;
     }
 
     pub fn process_keyboard(&mut self, key: PhysicalKey, state: ElementState) -> bool {
@@ -73,11 +78,13 @@ impl CameraController {
     pub fn process_mouse(&mut self, mouse_dx: f64, mouse_dy: f64) {
         self.yaw_pitch.x += mouse_dx as f32 * self.sensitivity;
         self.yaw_pitch.y += -mouse_dy as f32 * self.sensitivity;
+        self.yaw_pitch.y = clamp(self.yaw_pitch.y, -SAFE_FRAC_PI_2, SAFE_FRAC_PI_2);
     }
 
     pub fn update_camera(&mut self, camera: &mut Camera, dt: Duration) {
         camera.view.yaw_pitch.x = self.yaw_pitch.x;
         camera.view.yaw_pitch.y = self.yaw_pitch.y;
+        camera.view.yaw_pitch.y = clamp(camera.view.yaw_pitch.y, -SAFE_FRAC_PI_2, SAFE_FRAC_PI_2);
 
         let dt = dt.as_secs_f32();
 
@@ -98,11 +105,5 @@ impl CameraController {
         camera.view.position.add_mut(&right);
 
         camera.view.position.y += (self.amount_up - self.amount_down) * self.speed * dt;
-
-        if camera.view.yaw_pitch.y < -SAFE_FRAC_PI_2 {
-            camera.view.yaw_pitch.y = -SAFE_FRAC_PI_2;
-        } else if camera.view.yaw_pitch.y > SAFE_FRAC_PI_2 {
-            camera.view.yaw_pitch.y = SAFE_FRAC_PI_2;
-        }
     }
 }

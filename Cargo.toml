@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-wgpu = "0.19"
+wgpu = { version = "0.19" }
 winit = "0.29"
 imgui = "0.12"
 imgui-wgpu = { git = "https://github.com/mkrasnitski/imgui-wgpu-rs.git", branch = "master" }

@@ -5,7 +5,6 @@ use crate::cube::Vertex;
 use crate::gpu_utils::build_depth_texture;
 use crate::multimath::{Mat4, Vec2, Vec3};
 use crate::paint_utils::create_texels;
-use imgui::Key::P;
 use std::mem::offset_of;
 use wgpu::util::DeviceExt;
 use wgpu::{Device, Face};
@@ -32,12 +31,18 @@ impl Example {
         queue: &wgpu::Queue,
         size: (f32, f32),
     ) -> Self {
-        let camera = Camera::new(Vec3::new(), Vec2::new(), size.0, size.1);
+        let camera = Camera::new(
+            Vec3::from_components(27.0, 30.0, -11.0),
+            Vec2::from_components(1.04, -0.58),
+            size.0,
+            size.1,
+        );
         let camera_debug = Camera::new(Vec3::new(), Vec2::new(), size.0, size.1);
 
-        let camera_controller = CameraController::new(20.0, 0.004);
-        let camera_controller_debug = CameraController::new(200.0, 0.004);
-        let chunk = Chunk::new(&device, 0, 0);
+        let mut camera_controller = CameraController::new(20.0, 0.004);
+        camera_controller.copy_camera_rotation(&camera);
+        let mut camera_controller_debug = CameraController::new(200.0, 0.004);
+        camera_controller.copy_camera_rotation(&camera_debug);
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
@@ -206,9 +211,9 @@ impl Example {
 
         let depth_texture_1 = build_depth_texture(device, (512u32, 512u32));
 
-        Example {
+        let mut e = Example {
             last_spawn_x: 1,
-            chunks: vec![chunk],
+            chunks: vec![],
             bind_group,
             uniform_buffer: uniform_buf,
             pipeline,
@@ -219,14 +224,20 @@ impl Example {
             camera_controller_debug,
             depth_texture_main: depth_texture_0,
             depth_texture_secondary: depth_texture_1,
-        }
+        };
+
+        e.spawn_chunk(&device);
+
+        e
     }
 
     pub fn spawn_chunk(&mut self, device: &Device) {
-        for x in 0..16 {
-            for y in 0..16 {
-                let chunk = Chunk::new(device, x, y);
-                self.chunks.push(chunk);
+        for x in 0..8 {
+            for y in 0..6 {
+                for z in 0..8 {
+                    let chunk = Chunk::new(device, x, y, z);
+                    self.chunks.push(chunk);
+                }
             }
         }
     }

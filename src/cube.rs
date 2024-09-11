@@ -1,6 +1,6 @@
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use noise::{Blend, Fbm, NoiseFn, Perlin, RidgedMulti, Seedable};
+use noise::{NoiseFn, Perlin};
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub struct Vertex {
@@ -59,6 +59,14 @@ bitflags! {
 
 #[rustfmt::skip]
 pub fn add_faces(faces: BlockFaces, model: &mut GenModel, x: f32, y: f32, z: f32) {
+
+    let block_size = 1.0;
+    let world_scalar = 2.0;
+
+    let x = x * world_scalar;
+    let y = y * world_scalar;
+    let z = z * world_scalar;
+
     let mut push_quad = || {
         model.index_data.extend([
             model.top_stack + 0,
@@ -72,12 +80,13 @@ pub fn add_faces(faces: BlockFaces, model: &mut GenModel, x: f32, y: f32, z: f32
         model.top_stack += 4;
     };
 
+
     if faces.contains(BlockFaces::Right) {
         model.vertex_data.extend([
-            vertex([-1.0 + x, -1.0 + y,  1.0 + z], [0, 0, 1], [0, 0]),
-            vertex([ 1.0 + x, -1.0 + y,  1.0 + z], [0, 0, 1], [1, 0]),
-            vertex([ 1.0 + x,  1.0 + y,  1.0 + z], [0, 0, 1], [1, 1]),
-            vertex([-1.0 + x,  1.0 + y,  1.0 + z], [0, 0, 1], [0, 1]),
+            vertex([-block_size + x, -block_size + y,  block_size + z], [0, 0, 1], [0, 0]),
+            vertex([ block_size + x, -block_size + y,  block_size + z], [0, 0, 1], [1, 0]),
+            vertex([ block_size + x,  block_size + y,  block_size + z], [0, 0, 1], [1, 1]),
+            vertex([-block_size + x,  block_size + y,  block_size + z], [0, 0, 1], [0, 1]),
         ]);
 
         push_quad();
@@ -85,10 +94,10 @@ pub fn add_faces(faces: BlockFaces, model: &mut GenModel, x: f32, y: f32, z: f32
 
     if faces.contains(BlockFaces::Left) {
         model.vertex_data.extend([
-            vertex([-1.0 + x,  1.0 + y, -1.0 + z], [0, 0, -1], [1, 0]),
-            vertex([ 1.0 + x,  1.0 + y, -1.0 + z], [0, 0, -1], [0, 0]),
-            vertex([ 1.0 + x, -1.0 + y, -1.0 + z], [0, 0, -1], [0, 1]),
-            vertex([-1.0 + x, -1.0 + y, -1.0 + z], [0, 0, -1], [1, 1]),
+            vertex([-block_size + x,  block_size + y, -block_size + z], [0, 0, -1], [1, 0]),
+            vertex([ block_size + x,  block_size + y, -block_size + z], [0, 0, -1], [0, 0]),
+            vertex([ block_size + x, -block_size + y, -block_size + z], [0, 0, -1], [0, 1]),
+            vertex([-block_size + x, -block_size + y, -block_size + z], [0, 0, -1], [1, 1]),
         ]);
 
         push_quad();
@@ -96,10 +105,10 @@ pub fn add_faces(faces: BlockFaces, model: &mut GenModel, x: f32, y: f32, z: f32
 
     if faces.contains(BlockFaces::Back) {
         model.vertex_data.extend([
-            vertex([ 1.0 + x, -1.0 + y, -1.0 + z], [1, 0, 0], [0, 0]),
-            vertex([ 1.0 + x,  1.0 + y, -1.0 + z], [1, 0, 0], [1, 0]),
-            vertex([ 1.0 + x,  1.0 + y,  1.0 + z], [1, 0, 0], [1, 1]),
-            vertex([ 1.0 + x, -1.0 + y,  1.0 + z], [1, 0, 0], [0, 1]),
+            vertex([ block_size + x, -block_size + y, -block_size + z], [1, 0, 0], [0, 0]),
+            vertex([ block_size + x,  block_size + y, -block_size + z], [1, 0, 0], [1, 0]),
+            vertex([ block_size + x,  block_size + y,  block_size + z], [1, 0, 0], [1, 1]),
+            vertex([ block_size + x, -block_size + y,  block_size + z], [1, 0, 0], [0, 1]),
         ]);
 
         push_quad();
@@ -107,10 +116,10 @@ pub fn add_faces(faces: BlockFaces, model: &mut GenModel, x: f32, y: f32, z: f32
 
     if faces.contains(BlockFaces::Front) {
         model.vertex_data.extend([
-            vertex([-1.0 + x, -1.0 + y,  1.0 + z], [-1, 0, 0], [1, 0]),
-            vertex([-1.0 + x,  1.0 + y,  1.0 + z], [-1, 0, 0], [0, 0]),
-            vertex([-1.0 + x,  1.0 + y, -1.0 + z], [-1, 0, 0], [0, 1]),
-            vertex([-1.0 + x, -1.0 + y, -1.0 + z], [-1, 0, 0], [1, 1]),
+            vertex([-block_size + x, -block_size + y,  block_size + z], [-1, 0, 0], [1, 0]),
+            vertex([-block_size + x,  block_size + y,  block_size + z], [-1, 0, 0], [0, 0]),
+            vertex([-block_size + x,  block_size + y, -block_size + z], [-1, 0, 0], [0, 1]),
+            vertex([-block_size + x, -block_size + y, -block_size + z], [-1, 0, 0], [1, 1]),
         ]);
 
         push_quad();
@@ -118,10 +127,10 @@ pub fn add_faces(faces: BlockFaces, model: &mut GenModel, x: f32, y: f32, z: f32
 
     if faces.contains(BlockFaces::Top) {
         model.vertex_data.extend([
-            vertex([ 1.0 + x, 1.0 + y, -1.0 + z], [0, 1, 0], [1, 0]),
-            vertex([-1.0 + x, 1.0 + y, -1.0 + z], [0, 1, 0], [0, 0]),
-            vertex([-1.0 + x, 1.0 + y,  1.0 + z], [0, 1, 0], [0, 1]),
-            vertex([ 1.0 + x, 1.0 + y,  1.0 + z], [0, 1, 0], [1, 1]),
+            vertex([ block_size + x, block_size + y, -block_size + z], [0, 1, 0], [1, 0]),
+            vertex([-block_size + x, block_size + y, -block_size + z], [0, 1, 0], [0, 0]),
+            vertex([-block_size + x, block_size + y,  block_size + z], [0, 1, 0], [0, 1]),
+            vertex([ block_size + x, block_size + y,  block_size + z], [0, 1, 0], [1, 1]),
         ]);
 
         push_quad();
@@ -129,10 +138,10 @@ pub fn add_faces(faces: BlockFaces, model: &mut GenModel, x: f32, y: f32, z: f32
 
     if faces.contains(BlockFaces::Bottom) {
         model.vertex_data.extend([
-            vertex([ 1.0 + x, -1.0 + y,  1.0 + z], [0, -1, 0], [0, 0]),
-            vertex([-1.0 + x, -1.0 + y,  1.0 + z], [0, -1, 0], [1, 0]),
-            vertex([-1.0 + x, -1.0 + y, -1.0 + z], [0, -1, 0], [1, 1]),
-            vertex([ 1.0 + x, -1.0 + y, -1.0 + z], [0, -1, 0], [0, 1]),
+            vertex([ block_size + x, -block_size + y,  block_size + z], [0, -1, 0], [0, 0]),
+            vertex([-block_size + x, -block_size + y,  block_size + z], [0, -1, 0], [1, 0]),
+            vertex([-block_size + x, -block_size + y, -block_size + z], [0, -1, 0], [1, 1]),
+            vertex([ block_size + x, -block_size + y, -block_size + z], [0, -1, 0], [0, 1]),
         ]);
 
         push_quad();
@@ -146,7 +155,6 @@ pub fn generate_full_mesh(x: i32, y: i32, z: i32) -> ModelBundle {
     let mut model = GenModel::new();
 
     let noise_cache_size = 16usize * 16usize * 16usize;
-
     let mut data: Vec<bool> = vec![false; noise_cache_size];
 
     let index = |x, y, z| x as usize + y as usize * 16usize + z as usize * 16usize * 16usize;
@@ -212,9 +220,9 @@ pub fn generate_full_mesh(x: i32, y: i32, z: i32) -> ModelBundle {
                 add_faces(
                     face,
                     &mut model,
-                    (i_x + x) as f32 * 2.0,
-                    (i_y + y) as f32 * 2.0,
-                    (i_z + z) as f32 * 2.0,
+                    i_x as f32,
+                    i_y as f32,
+                    i_z as f32,
                 );
             }
         }

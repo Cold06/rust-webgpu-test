@@ -227,6 +227,10 @@ impl Vec2 {
     pub fn new() -> Self {
         Self { x: 0.0, y: 0.0 }
     }
+
+    pub fn from_components(x: f32, y: f32) -> Self {
+        Self { x, y }
+    }
 }
 
 impl Debug for Vec2 {

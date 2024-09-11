@@ -1,4 +1,4 @@
-use crate::cube::{generate_full_mesh, BlockFaces};
+use crate::cube::generate_full_mesh;
 use crate::multimath::Vec4;
 use wgpu::util::DeviceExt;
 use wgpu::{BindGroupDescriptor, Device};
@@ -27,8 +27,8 @@ impl Chunk {
             }],
         })
     }
-    pub fn new(device: &Device, x: i32, z: i32) -> Self {
-        let model = generate_full_mesh(x * 16, 0, z * 16);
+    pub fn new(device: &Device, x: i32, y: i32, z: i32) -> Self {
+        let model = generate_full_mesh(x * 16, y * 16, z * 16);
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
@@ -42,11 +42,11 @@ impl Chunk {
             usage: wgpu::BufferUsages::INDEX,
         });
 
-        println!("NEW CHUNK AT {:?}", ((x as f32) * (1.0), 0.0, (z as f32) * (1.0), 0.0));
+        let pos = (x as f32 * 32.0, y as f32 * 32.0, z as f32 * 32.0, 0.0);
 
         let position_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Position"),
-            contents: bytemuck::bytes_of(&Vec4::from_components((x as f32) * (1.0), 0.0, (z as f32) * (1.0), 0.0)),
+            contents: bytemuck::bytes_of(&Vec4::from_components(pos.0, pos.1, pos.2, pos.3)),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
