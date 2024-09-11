@@ -8,6 +8,7 @@ mod example;
 mod gpu;
 mod gpu_utils;
 mod gui;
+mod gui_utils;
 mod multimath;
 mod paint_utils;
 mod window;
@@ -16,6 +17,7 @@ use crate::camera_utils::process_camera_input;
 use crate::example::Example;
 use crate::gpu_utils::build_depth_texture;
 use crate::gui::Gui;
+use crate::gui_utils::GUICanvas;
 use crate::window::OSWindow;
 use imgui::*;
 use imgui_wgpu;
@@ -85,9 +87,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         gui.renderer.textures.insert(texture)
     };
 
+    let mut example_canvas = GUICanvas::new(&mut gui.renderer, &device, [250, 250]);
+
+    example_canvas.with(|ctx| ctx.fill_rect(0.0, 0.0, 100.0, 100.0));
+    example_canvas.update(&mut gui.renderer, &queue);
+
     let mut focused = false;
     let mut last_frame = Instant::now();
     let mut use_debug_camera = false;
+    let mut square_dist = 0.0;
 
     event_loop.run(|event, window_target| {
         window_target.set_control_flow(ControlFlow::Poll);
@@ -192,6 +200,25 @@ fn main() -> Result<(), Box<dyn Error>> {
                             new_example_size = Some(ui.content_region_avail());
                             Image::new(example_texture_id, new_example_size.unwrap()).build(ui);
                         });
+
+                    ui.window("My Texture Example").build(|| {
+                        let size = Some(ui.content_region_avail()).unwrap();
+                        Image::new(example_canvas.texture_id, [size[0], size[1] - 40.0]).build(ui);
+
+                        if ui.button("Add Square") {
+                            square_dist += 50.0;
+
+                            example_canvas.with(|ctx| {
+                                ctx.fill_rect(
+                                    square_dist,
+                                    square_dist,
+                                    100.0 + square_dist,
+                                    100.0 + square_dist,
+                                )
+                            });
+                            example_canvas.update(&mut gui.renderer, &queue);
+                        }
+                    });
 
                     ui.window("Chunk Manager")
                         .size([170.0, 260.0], Condition::FirstUseEver)
