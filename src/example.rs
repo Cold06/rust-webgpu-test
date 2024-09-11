@@ -8,7 +8,7 @@ use crate::paint_utils::create_texels;
 use imgui::Key::P;
 use std::mem::offset_of;
 use wgpu::util::DeviceExt;
-use wgpu::Device;
+use wgpu::{Device, Face};
 
 pub struct Example {
     chunks: Vec<Chunk>,
@@ -36,7 +36,7 @@ impl Example {
         let camera_debug = Camera::new(Vec3::new(), Vec2::new(), size.0, size.1);
 
         let camera_controller = CameraController::new(20.0, 0.004);
-        let camera_controller_debug = CameraController::new(4.0, 0.004);
+        let camera_controller_debug = CameraController::new(200.0, 0.004);
         let chunk = Chunk::new(&device, 0, 0);
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -187,7 +187,7 @@ impl Example {
                     targets: &[Some(config.format.into())],
                 }),
                 primitive: wgpu::PrimitiveState {
-                    cull_mode: None,
+                    cull_mode: Some(Face::Back),
                     ..Default::default()
                 },
                 depth_stencil: Some(wgpu::DepthStencilState {

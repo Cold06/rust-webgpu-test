@@ -141,64 +141,80 @@ pub fn add_faces(faces: BlockFaces, model: &mut GenModel, x: f32, y: f32, z: f32
 
 pub fn generate_full_mesh(x: i32, y: i32, z: i32) -> ModelBundle {
     let perlin = Perlin::default();
-    let ridged = RidgedMulti::<Perlin>::default();
-    let fbm = Fbm::<Perlin>::default();
-    let blend = Blend::new(perlin, ridged, fbm);
-
-    let c_x = x;
-    let c_y = y;
-    let c_z = z;
-
     let size = 16;
 
     let mut model = GenModel::new();
 
-    for x in 0..size {
-        for y in 0..size {
-            for z in 0..size {
+    let noise_cache_size = 16usize * 16usize * 16usize;
 
-                let x = x + c_x;
-                let y = y + c_y;
-                let z = z + c_z;
+    let mut data: Vec<bool> = vec![false; noise_cache_size];
 
+    let index = |x, y, z| x as usize + y as usize * 16usize + z as usize * 16usize * 16usize;
+
+    for i_x in 0..size {
+        for i_y in 0..size {
+            for i_z in 0..size {
                 let noise_scale = 0.1;
 
+                let noise = perlin.get([
+                    (i_x + x) as f64 * noise_scale,
+                    (i_y + y) as f64 * noise_scale,
+                    (i_z + z) as f64 * noise_scale,
+                ]) > 0.2;
+
+                data[index(i_x, i_y, i_z)] = noise;
+            }
+        }
+    }
+
+    for i_x in 0..size {
+        for i_y in 0..size {
+            for i_z in 0..size {
                 let get_at = |x, y, z| {
-                    blend.get([
-                        (x as f64) * noise_scale,
-                        (y as f64) * noise_scale,
-                        (z as f64) * noise_scale,
-                    ]) > 0.2
+                    let val = data[index(x, y, z)];
+                    val
                 };
 
                 let mut face = BlockFaces::None;
 
-                let self_block = get_at(x + 0, y + 0, z + 0);
+                let self_block = get_at(i_x + 0, i_y + 0, i_z + 0);
 
                 if !self_block {
                     continue;
                 }
 
-                {
-                    //                                           // Y
-                    face.set(BlockFaces::Top, !get_at(x + 0, y + 1, z + 0));
-                    face.set(BlockFaces::Bottom, !get_at(x + 0, y - 1, z + 0));
+                // TODO: do chunk stitching
 
-                    //                                                        Z
-                    face.set(BlockFaces::Left, !get_at(x + 0, y + 0, z - 1));
-                    face.set(BlockFaces::Right, !get_at(x + 0, y + 0, z + 1));
+                if i_y != 15 {
+                    face.set(BlockFaces::Top, !get_at(i_x + 0, i_y + 1, i_z + 0));
+                }
 
-                    //                                  X
-                    face.set(BlockFaces::Front, !get_at(x - 1, y + 0, z + 0));
-                    face.set(BlockFaces::Back, !get_at(x + 1, y + 0, z + 0));
+                if i_y != 0 {
+                    face.set(BlockFaces::Bottom, !get_at(i_x + 0, i_y - 1, i_z + 0));
+                }
+
+                if i_z != 0 {
+                    face.set(BlockFaces::Left, !get_at(i_x + 0, i_y + 0, i_z - 1));
+                }
+
+                if i_z != 15 {
+                    face.set(BlockFaces::Right, !get_at(i_x + 0, i_y + 0, i_z + 1));
+                }
+
+                if i_x != 0 {
+                    face.set(BlockFaces::Front, !get_at(i_x - 1, i_y + 0, i_z + 0));
+                }
+
+                if i_x != 15 {
+                    face.set(BlockFaces::Back, !get_at(i_x + 1, i_y + 0, i_z + 0));
                 }
 
                 add_faces(
                     face,
                     &mut model,
-                    (x as f32)  * 2.0,
-                    (y as f32)  * 2.0,
-                    (z as f32)  * 2.0,
+                    (i_x + x) as f32 * 2.0,
+                    (i_y + y) as f32 * 2.0,
+                    (i_z + z) as f32 * 2.0,
                 );
             }
         }

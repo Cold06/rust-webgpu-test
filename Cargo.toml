@@ -17,3 +17,6 @@ skia-safe = {version = "0.75.0", features = ["textlayout"]}
 rquickjs = {version = "0.6.2", features = ["macro", "rust-alloc", "loader", "dyn-load"]}
 bitflags = "2.6"
 noise = "0.9.0"
+
+[profile.release]
+debug = 1
