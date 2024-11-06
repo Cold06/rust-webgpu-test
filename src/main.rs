@@ -12,6 +12,7 @@ mod gui_utils;
 mod multimath;
 mod paint_utils;
 mod window;
+mod video;
 
 use crate::camera_utils::process_camera_input;
 use crate::example::Example;
@@ -23,6 +24,7 @@ use imgui::*;
 use imgui_wgpu;
 use pollster::block_on;
 use std::error::Error;
+use std::path::Path;
 use std::time::Instant;
 use winit::{
     dpi::LogicalSize,
@@ -31,9 +33,12 @@ use winit::{
     keyboard::{Key, NamedKey},
     window::CursorGrabMode,
 };
+use crate::video::{start, FrameData, PipelineEvent};
 
 fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
+
+    let (a, b) = start(Path::new("/Users/cold/Desktop/YP-1R-05x13.mp4").canonicalize().unwrap());
 
     let event_loop = EventLoop::new()?;
 
@@ -98,6 +103,22 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut square_dist = 0.0;
 
     event_loop.run(|event, window_target| {
+
+        if let Ok(frame) = b.try_recv() {
+            match frame {
+                PipelineEvent::Data(frame) => {
+                    match frame.data {
+                        FrameData::PlanarYuv420(planes) => {
+                            println!("Got frame {:?} Y {}", frame.pts, planes.y_plane[0]);
+                        }
+                    }
+                }
+                PipelineEvent::EOS => {
+                    println!("Got end of stream");
+                }
+            }
+        }
+
         window_target.set_control_flow(ControlFlow::Poll);
 
         let imgui_io = gui.imgui.io();
@@ -320,6 +341,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         gui.platform
             .handle_event(gui.imgui.io_mut(), &window.window, &event);
     })?;
+
+    drop(a);
 
     Ok(())
 }

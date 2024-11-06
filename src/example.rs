@@ -7,7 +7,7 @@ use crate::multimath::{Mat4, Vec2, Vec3};
 use crate::paint_utils::create_texels;
 use std::mem::offset_of;
 use wgpu::util::DeviceExt;
-use wgpu::{Device, Face};
+use wgpu::{Device, Face, PrimitiveTopology};
 
 pub struct Example {
     chunks: Vec<Chunk>,
@@ -193,6 +193,7 @@ impl Example {
                 }),
                 primitive: wgpu::PrimitiveState {
                     cull_mode: Some(Face::Back),
+                    topology: PrimitiveTopology::TriangleList,
                     ..Default::default()
                 },
                 depth_stencil: Some(wgpu::DepthStencilState {
