@@ -17,7 +17,7 @@ mod window;
 
 use crate::camera_utils::process_camera_input;
 use crate::example::Example;
-use crate::gpu::SView;
+use crate::gpu::{SView, ViewTarget};
 use crate::gpu_utils::build_depth_texture;
 use crate::gui::Gui;
 use crate::gui_utils::GUICanvas;
@@ -108,6 +108,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut use_debug_camera = false;
     let mut square_dist = 0.0;
 
+    let mut surface_depth = ViewTarget::create(&device, size.width, size.height);
+
+    let mut imgui_view_depth = ViewTarget::create(&device, 512u32, 512u32);
+
+
     event_loop.run(|event, window_target| {
         if let Ok(frame) = b.try_recv() {
             match frame {
@@ -139,8 +144,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
             Event::WindowEvent { ref event, .. } => match event {
                 WindowEvent::Resized(size) => {
-                    example.depth_texture_main =
-                        build_depth_texture(&device, (size.width, size.height));
+                    surface_depth.resize(&device, size.width, size.height);
 
                     window.re_configure(&device);
 
@@ -211,8 +215,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         .texture
                         .create_view(&wgpu::TextureViewDescriptor::default());
 
-                    let depth_view = &example
-                        .depth_texture_main
+                    let depth_view = &surface_depth.depth_stencil
                         .create_view(&wgpu::TextureViewDescriptor::default());
 
                     example.render(&device, &queue, &SView::new(color_view, depth_view));
@@ -303,12 +306,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 .camera_debug
                                 .resize(example_size[0] * scale[0], example_size[1] * scale[1]);
 
-                            example.depth_texture_secondary = build_depth_texture(
+                            imgui_view_depth.resize(
                                 &device,
-                                (
-                                    (example_size[0] * scale[0]) as u32,
-                                    (example_size[1] * scale[1]) as u32,
-                                ),
+                                (example_size[0] * scale[0]) as u32,
+                                (example_size[1] * scale[1]) as u32,
                             );
                         }
 
@@ -325,8 +326,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                             .unwrap()
                             .view();
 
-                        let depth_view = &example
-                            .depth_texture_secondary
+                        let depth_view = &imgui_view_depth.depth_stencil
                             .create_view(&wgpu::TextureViewDescriptor::default());
 
                         example.render(&device, &queue, &SView::new(color_view, depth_view));

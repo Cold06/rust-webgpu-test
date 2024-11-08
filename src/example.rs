@@ -2,7 +2,6 @@ use crate::camera::Camera;
 use crate::camera_controller::CameraController;
 use crate::chunk::Chunk;
 use crate::gpu::SView;
-use crate::gpu_utils::build_depth_texture;
 use crate::multimath::{Vec2, Vec3};
 use crate::paint_utils::create_texels;
 use crate::pipelines::quad_mesh;
@@ -12,8 +11,6 @@ pub struct Example {
     bind_group: quad_mesh::BindGroup0,
     pipeline: quad_mesh::Pipeline,
     time: f32,
-    pub depth_texture_main: wgpu::Texture,
-    pub depth_texture_secondary: wgpu::Texture,
     pub camera_controller: CameraController,
     pub camera_controller_debug: CameraController,
     pub camera: Camera,
@@ -48,10 +45,6 @@ impl Example {
 
         let pipeline = quad_mesh::Pipeline::create(device, config.format);
 
-        let depth_texture_0 = build_depth_texture(device, (size.0 as u32, size.1 as u32));
-
-        let depth_texture_1 = build_depth_texture(device, (512u32, 512u32));
-
         let mut e = Example {
             last_spawn_x: 1,
             chunks: vec![],
@@ -62,8 +55,6 @@ impl Example {
             camera_debug,
             camera_controller,
             camera_controller_debug,
-            depth_texture_main: depth_texture_0,
-            depth_texture_secondary: depth_texture_1,
         };
 
         e.spawn_chunk(&device);

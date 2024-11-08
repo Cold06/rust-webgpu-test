@@ -1,9 +1,27 @@
+use crate::gpu_utils::build_depth_texture;
+
+pub struct ViewTarget {
+    pub depth_stencil: wgpu::Texture,
+}
+
+impl ViewTarget {
+    pub fn create(device: &wgpu::Device, width: u32, height: u32) -> Self {
+        Self {
+            depth_stencil: build_depth_texture(device, (width, height)),
+        }
+    }
+
+    pub fn resize(&mut self, device: &wgpu::Device, width: u32, height: u32) {
+        self.depth_stencil = build_depth_texture(device, (width, height));
+    }
+}
+
 pub struct SView<'a> {
     color_view: &'a wgpu::TextureView,
     depth_view: &'a wgpu::TextureView,
 }
 
-impl <'a>SView<'a> {
+impl<'a> SView<'a> {
     pub fn new(color_view: &'a wgpu::TextureView, depth_view: &'a wgpu::TextureView) -> SView<'a> {
         Self {
             color_view,
