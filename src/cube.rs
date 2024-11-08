@@ -1,10 +1,10 @@
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use noise::{NoiseFn, Perlin};
-use crate::pipelines::{vertex, ModelBundle, Vertex};
+use crate::pipelines::quad_mesh;
 
 struct GenModel {
-    pub vertex_data: Vec<Vertex>,
+    pub vertex_data: Vec<quad_mesh::Vertex>,
     pub index_data: Vec<u32>,
     pub top_stack: u32,
 }
@@ -64,10 +64,10 @@ pub fn add_faces(faces: BlockFaces, model: &mut GenModel, x: f32, y: f32, z: f32
 
     if faces.contains(BlockFaces::Right) {
         model.vertex_data.extend([
-            vertex([-block_size + x, -block_size + y,  block_size + z], [0, 0, 1], [0, 0]),
-            vertex([ block_size + x, -block_size + y,  block_size + z], [0, 0, 1], [1, 0]),
-            vertex([ block_size + x,  block_size + y,  block_size + z], [0, 0, 1], [1, 1]),
-            vertex([-block_size + x,  block_size + y,  block_size + z], [0, 0, 1], [0, 1]),
+            quad_mesh::vertex([-block_size + x, -block_size + y,  block_size + z], [0, 0, 1], [0, 0]),
+            quad_mesh::vertex([ block_size + x, -block_size + y,  block_size + z], [0, 0, 1], [1, 0]),
+            quad_mesh::vertex([ block_size + x,  block_size + y,  block_size + z], [0, 0, 1], [1, 1]),
+            quad_mesh::vertex([-block_size + x,  block_size + y,  block_size + z], [0, 0, 1], [0, 1]),
         ]);
 
         push_quad();
@@ -75,10 +75,10 @@ pub fn add_faces(faces: BlockFaces, model: &mut GenModel, x: f32, y: f32, z: f32
 
     if faces.contains(BlockFaces::Left) {
         model.vertex_data.extend([
-            vertex([-block_size + x,  block_size + y, -block_size + z], [0, 0, -1], [1, 0]),
-            vertex([ block_size + x,  block_size + y, -block_size + z], [0, 0, -1], [0, 0]),
-            vertex([ block_size + x, -block_size + y, -block_size + z], [0, 0, -1], [0, 1]),
-            vertex([-block_size + x, -block_size + y, -block_size + z], [0, 0, -1], [1, 1]),
+            quad_mesh::vertex([-block_size + x,  block_size + y, -block_size + z], [0, 0, -1], [1, 0]),
+            quad_mesh::vertex([ block_size + x,  block_size + y, -block_size + z], [0, 0, -1], [0, 0]),
+            quad_mesh::vertex([ block_size + x, -block_size + y, -block_size + z], [0, 0, -1], [0, 1]),
+            quad_mesh::vertex([-block_size + x, -block_size + y, -block_size + z], [0, 0, -1], [1, 1]),
         ]);
 
         push_quad();
@@ -86,10 +86,10 @@ pub fn add_faces(faces: BlockFaces, model: &mut GenModel, x: f32, y: f32, z: f32
 
     if faces.contains(BlockFaces::Back) {
         model.vertex_data.extend([
-            vertex([ block_size + x, -block_size + y, -block_size + z], [1, 0, 0], [0, 0]),
-            vertex([ block_size + x,  block_size + y, -block_size + z], [1, 0, 0], [1, 0]),
-            vertex([ block_size + x,  block_size + y,  block_size + z], [1, 0, 0], [1, 1]),
-            vertex([ block_size + x, -block_size + y,  block_size + z], [1, 0, 0], [0, 1]),
+            quad_mesh::vertex([ block_size + x, -block_size + y, -block_size + z], [1, 0, 0], [0, 0]),
+            quad_mesh::vertex([ block_size + x,  block_size + y, -block_size + z], [1, 0, 0], [1, 0]),
+            quad_mesh::vertex([ block_size + x,  block_size + y,  block_size + z], [1, 0, 0], [1, 1]),
+            quad_mesh::vertex([ block_size + x, -block_size + y,  block_size + z], [1, 0, 0], [0, 1]),
         ]);
 
         push_quad();
@@ -97,10 +97,10 @@ pub fn add_faces(faces: BlockFaces, model: &mut GenModel, x: f32, y: f32, z: f32
 
     if faces.contains(BlockFaces::Front) {
         model.vertex_data.extend([
-            vertex([-block_size + x, -block_size + y,  block_size + z], [-1, 0, 0], [1, 0]),
-            vertex([-block_size + x,  block_size + y,  block_size + z], [-1, 0, 0], [0, 0]),
-            vertex([-block_size + x,  block_size + y, -block_size + z], [-1, 0, 0], [0, 1]),
-            vertex([-block_size + x, -block_size + y, -block_size + z], [-1, 0, 0], [1, 1]),
+            quad_mesh::vertex([-block_size + x, -block_size + y,  block_size + z], [-1, 0, 0], [1, 0]),
+            quad_mesh::vertex([-block_size + x,  block_size + y,  block_size + z], [-1, 0, 0], [0, 0]),
+            quad_mesh::vertex([-block_size + x,  block_size + y, -block_size + z], [-1, 0, 0], [0, 1]),
+            quad_mesh::vertex([-block_size + x, -block_size + y, -block_size + z], [-1, 0, 0], [1, 1]),
         ]);
 
         push_quad();
@@ -108,10 +108,10 @@ pub fn add_faces(faces: BlockFaces, model: &mut GenModel, x: f32, y: f32, z: f32
 
     if faces.contains(BlockFaces::Top) {
         model.vertex_data.extend([
-            vertex([ block_size + x, block_size + y, -block_size + z], [0, 1, 0], [1, 0]),
-            vertex([-block_size + x, block_size + y, -block_size + z], [0, 1, 0], [0, 0]),
-            vertex([-block_size + x, block_size + y,  block_size + z], [0, 1, 0], [0, 1]),
-            vertex([ block_size + x, block_size + y,  block_size + z], [0, 1, 0], [1, 1]),
+            quad_mesh::vertex([ block_size + x, block_size + y, -block_size + z], [0, 1, 0], [1, 0]),
+            quad_mesh::vertex([-block_size + x, block_size + y, -block_size + z], [0, 1, 0], [0, 0]),
+            quad_mesh::vertex([-block_size + x, block_size + y,  block_size + z], [0, 1, 0], [0, 1]),
+            quad_mesh::vertex([ block_size + x, block_size + y,  block_size + z], [0, 1, 0], [1, 1]),
         ]);
 
         push_quad();
@@ -119,17 +119,17 @@ pub fn add_faces(faces: BlockFaces, model: &mut GenModel, x: f32, y: f32, z: f32
 
     if faces.contains(BlockFaces::Bottom) {
         model.vertex_data.extend([
-            vertex([ block_size + x, -block_size + y,  block_size + z], [0, -1, 0], [0, 0]),
-            vertex([-block_size + x, -block_size + y,  block_size + z], [0, -1, 0], [1, 0]),
-            vertex([-block_size + x, -block_size + y, -block_size + z], [0, -1, 0], [1, 1]),
-            vertex([ block_size + x, -block_size + y, -block_size + z], [0, -1, 0], [0, 1]),
+            quad_mesh::vertex([ block_size + x, -block_size + y,  block_size + z], [0, -1, 0], [0, 0]),
+            quad_mesh::vertex([-block_size + x, -block_size + y,  block_size + z], [0, -1, 0], [1, 0]),
+            quad_mesh::vertex([-block_size + x, -block_size + y, -block_size + z], [0, -1, 0], [1, 1]),
+            quad_mesh::vertex([ block_size + x, -block_size + y, -block_size + z], [0, -1, 0], [0, 1]),
         ]);
 
         push_quad();
     }
 }
 
-pub fn generate_full_mesh(x: i32, y: i32, z: i32) -> ModelBundle {
+pub fn generate_full_mesh(x: i32, y: i32, z: i32) -> quad_mesh::ModelBundle {
     let perlin = Perlin::default();
     let size = 16;
 
@@ -209,7 +209,7 @@ pub fn generate_full_mesh(x: i32, y: i32, z: i32) -> ModelBundle {
         }
     }
 
-    ModelBundle {
+    quad_mesh::ModelBundle {
         vertex_data: model.vertex_data,
         index_data: model.index_data,
     }

@@ -1,19 +1,16 @@
 use crate::camera::Camera;
 use crate::camera_controller::CameraController;
 use crate::chunk::Chunk;
-use crate::pipelines::{Pipeline, Vertex};
+use crate::pipelines::quad_mesh;
 use crate::gpu_utils::build_depth_texture;
-use crate::multimath::{Mat4, Vec2, Vec3};
+use crate::multimath::{Vec2, Vec3};
 use crate::paint_utils::create_texels;
-use crate::pipelines::{BindGroup0, BindGroup1, VertexFormat};
-use std::mem::offset_of;
-use wgpu::util::DeviceExt;
-use wgpu::{Device, Face, PrimitiveTopology};
+use wgpu::Device;
 
 pub struct Example {
     chunks: Vec<Chunk>,
-    bind_group: BindGroup0,
-    pipeline: Pipeline,
+    bind_group: quad_mesh::BindGroup0,
+    pipeline: quad_mesh::Pipeline,
     time: f32,
     pub depth_texture_main: wgpu::Texture,
     pub depth_texture_secondary: wgpu::Texture,
@@ -47,9 +44,9 @@ impl Example {
         let fractal_size = 256u32;
         let texels = create_texels(fractal_size as usize);
 
-        let bind_group = BindGroup0::create(device, queue, fractal_size, texels);
+        let bind_group = quad_mesh::BindGroup0::create(device, queue, fractal_size, texels);
 
-        let pipeline = Pipeline::create(device, config.format);
+        let pipeline = quad_mesh::Pipeline::create(device, config.format);
 
         let depth_texture_0 = build_depth_texture(device, (size.0 as u32, size.1 as u32));
 
