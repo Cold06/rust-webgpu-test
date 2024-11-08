@@ -3,7 +3,7 @@ use crate::multimath::{Mat4, Vec4};
 use bytemuck::{Pod, Zeroable};
 use std::mem::offset_of;
 use wgpu::util::DeviceExt;
-
+use wgpu::Device;
 
 pub mod quad_mesh;
 
@@ -239,6 +239,52 @@ impl BindGroup1 {
     }
 }
 
-struct Pipeline {
-    pipeline: wgpu::RenderPipeline,
+pub struct Pipeline {
+    pub pipeline: wgpu::RenderPipeline,
+}
+
+impl Pipeline {
+    pub fn create(device: &Device, format: wgpu::TextureFormat) -> Self {
+        let shader = device.create_shader_module(wgpu::include_wgsl!("../../resources/cube.wgsl"));
+
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[
+                &BindGroup0::get_layout(device),
+                &BindGroup1::get_layout(device),
+            ],
+            push_constant_ranges: &[],
+        });
+
+        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: None,
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: "vs_main",
+                buffers: &VertexFormat::LAYOUT,
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: "fs_main",
+                targets: &[Some(format.into())],
+            }),
+            primitive: wgpu::PrimitiveState {
+                cull_mode: Some(wgpu::Face::Back),
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth32Float,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+            }),
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+        });
+
+        Self { pipeline }
+    }
 }

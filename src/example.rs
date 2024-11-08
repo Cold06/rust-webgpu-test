@@ -1,7 +1,7 @@
 use crate::camera::Camera;
 use crate::camera_controller::CameraController;
 use crate::chunk::Chunk;
-use crate::pipelines::Vertex;
+use crate::pipelines::{Pipeline, Vertex};
 use crate::gpu_utils::build_depth_texture;
 use crate::multimath::{Mat4, Vec2, Vec3};
 use crate::paint_utils::create_texels;
@@ -13,7 +13,7 @@ use wgpu::{Device, Face, PrimitiveTopology};
 pub struct Example {
     chunks: Vec<Chunk>,
     bind_group: BindGroup0,
-    pipeline: wgpu::RenderPipeline,
+    pipeline: Pipeline,
     time: f32,
     pub depth_texture_main: wgpu::Texture,
     pub depth_texture_secondary: wgpu::Texture,
@@ -49,47 +49,7 @@ impl Example {
 
         let bind_group = BindGroup0::create(device, queue, fractal_size, texels);
 
-        let pipeline = {
-            let shader = device.create_shader_module(wgpu::include_wgsl!("../resources/cube.wgsl"));
-
-            let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: None,
-                bind_group_layouts: &[
-                    &BindGroup0::get_layout(device),
-                    &BindGroup1::get_layout(&device),
-                ],
-                push_constant_ranges: &[],
-            });
-
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: None,
-                layout: Some(&pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: &shader,
-                    entry_point: "vs_main",
-                    buffers: &VertexFormat::LAYOUT,
-                },
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader,
-                    entry_point: "fs_main",
-                    targets: &[Some(config.format.into())],
-                }),
-                primitive: wgpu::PrimitiveState {
-                    cull_mode: Some(Face::Back),
-                    topology: PrimitiveTopology::TriangleList,
-                    ..Default::default()
-                },
-                depth_stencil: Some(wgpu::DepthStencilState {
-                    format: wgpu::TextureFormat::Depth32Float,
-                    stencil: wgpu::StencilState::default(),
-                    bias: wgpu::DepthBiasState::default(),
-                    depth_write_enabled: true,
-                    depth_compare: wgpu::CompareFunction::Less,
-                }),
-                multisample: wgpu::MultisampleState::default(),
-                multiview: None,
-            })
-        };
+        let pipeline = Pipeline::create(device, config.format);
 
         let depth_texture_0 = build_depth_texture(device, (size.0 as u32, size.1 as u32));
 
@@ -174,7 +134,7 @@ impl Example {
             for chunk in &self.chunks {
                 pass.push_debug_group("Prepare data for draw.");
                 {
-                    pass.set_pipeline(&self.pipeline);
+                    pass.set_pipeline(&self.pipeline.pipeline);
                     pass.set_bind_group(0, &self.bind_group.bind_group, &[]);
                     pass.set_bind_group(1, &chunk.bind_group.bind_group, &[]);
                     pass.set_index_buffer(chunk.vertex_format.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
