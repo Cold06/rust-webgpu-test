@@ -2,6 +2,7 @@ use std::mem::offset_of;
 use bytemuck::{Pod, Zeroable};
 use wgpu::{BindGroupDescriptor, Buffer, Device, Sampler, TextureView};
 use wgpu::util::DeviceExt;
+use crate::multimath::Vec4;
 
 pub mod quad_mesh;
 
@@ -168,7 +169,13 @@ impl BindGroup1 {
         device.create_bind_group_layout(&Self::LAYOUT)
     }
 
-    pub fn create(device: &Device, position_buffer: &Buffer) -> Self {
+    pub fn create(device: &Device, position: Vec4) -> Self {
+        let position_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: None,
+            contents: bytemuck::bytes_of(&position),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
         let bind_group = device.create_bind_group(&BindGroupDescriptor {
             layout: &BindGroup1::get_layout(device),
             label: None,
