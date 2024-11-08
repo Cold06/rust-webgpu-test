@@ -1,10 +1,9 @@
 use crate::camera::Camera;
 use crate::multimath::{Mat4, Vec4};
-use crate::paint_utils::create_texels;
 use bytemuck::{Pod, Zeroable};
 use std::mem::offset_of;
 use wgpu::util::DeviceExt;
-use wgpu::{BindGroupDescriptor, Buffer, Device, Queue, Sampler, TextureView};
+
 
 pub mod quad_mesh;
 
@@ -30,8 +29,8 @@ pub struct ModelBundle {
 }
 
 pub struct VertexFormat {
-    pub vertex_buffer: Buffer,
-    pub index_buffer: Buffer,
+    pub vertex_buffer: wgpu::Buffer,
+    pub index_buffer: wgpu::Buffer,
 }
 
 impl VertexFormat {
@@ -57,7 +56,7 @@ impl VertexFormat {
         ],
     }];
 
-    pub fn create(device: &Device, model_bundle: &ModelBundle) -> Self {
+    pub fn create(device: &wgpu::Device, model_bundle: &ModelBundle) -> Self {
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             contents: bytemuck::cast_slice(&model_bundle.vertex_data),
@@ -79,7 +78,7 @@ impl VertexFormat {
 
 pub struct BindGroup0 {
     pub bind_group: wgpu::BindGroup,
-    uniform_buffer: Buffer,
+    uniform_buffer: wgpu::Buffer,
 }
 
 impl BindGroup0 {
@@ -115,7 +114,7 @@ impl BindGroup0 {
         ],
     };
 
-    pub fn get_layout(device: &Device) -> wgpu::BindGroupLayout {
+    pub fn get_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&Self::LAYOUT)
     }
 
@@ -123,7 +122,7 @@ impl BindGroup0 {
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(&camera.matrix));
     }
 
-    pub fn create(device: &Device, queue: &Queue, size: u32, texels: Vec<u8>) -> Self {
+    pub fn create(device: &wgpu::Device, queue: &wgpu::Queue, size: u32, texels: Vec<u8>) -> Self {
         let texture_extent = wgpu::Extent3d {
             width: size,
             height: size,
@@ -216,18 +215,18 @@ impl BindGroup1 {
         }],
     };
 
-    pub fn get_layout(device: &Device) -> wgpu::BindGroupLayout {
+    pub fn get_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&Self::LAYOUT)
     }
 
-    pub fn create(device: &Device, position: Vec4) -> Self {
+    pub fn create(device: &wgpu::Device, position: Vec4) -> Self {
         let position_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             contents: bytemuck::bytes_of(&position),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        let bind_group = device.create_bind_group(&BindGroupDescriptor {
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &BindGroup1::get_layout(device),
             label: None,
             entries: &[wgpu::BindGroupEntry {
@@ -238,4 +237,8 @@ impl BindGroup1 {
 
         Self { bind_group }
     }
+}
+
+struct Pipeline {
+    pipeline: wgpu::RenderPipeline,
 }
