@@ -1,17 +1,18 @@
 use crate::camera::Camera;
 use crate::camera_controller::CameraController;
 use crate::chunk::Chunk;
-use crate::cube::Vertex;
+use crate::pipelines::Vertex;
 use crate::gpu_utils::build_depth_texture;
 use crate::multimath::{Mat4, Vec2, Vec3};
 use crate::paint_utils::create_texels;
+use crate::pipelines::{BindGroup0, BindGroup1, VertexFormat};
 use std::mem::offset_of;
 use wgpu::util::DeviceExt;
 use wgpu::{Device, Face, PrimitiveTopology};
 
 pub struct Example {
     chunks: Vec<Chunk>,
-    bind_group: wgpu::BindGroup,
+    bind_group: BindGroup0,
     uniform_buffer: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
     time: f32,
@@ -43,38 +44,6 @@ impl Example {
         camera_controller.copy_camera_rotation(&camera);
         let mut camera_controller_debug = CameraController::new(200.0, 0.004);
         camera_controller.copy_camera_rotation(&camera_debug);
-
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: wgpu::BufferSize::new(64),
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        multisampled: false,
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
-        });
 
         let texture_view = {
             let fractal_size = 256u32;
@@ -128,53 +97,17 @@ impl Example {
             ..Default::default()
         });
 
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: uniform_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&texture_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
-            ],
-            label: None,
-        });
+        let bind_group = BindGroup0::create(device, &uniform_buf, &texture_view, &sampler);
 
         let pipeline = {
             let shader = device.create_shader_module(wgpu::include_wgsl!("../resources/cube.wgsl"));
 
-            let vertex_buffers = [wgpu::VertexBufferLayout {
-                array_stride: size_of::<Vertex>() as wgpu::BufferAddress,
-                step_mode: wgpu::VertexStepMode::Vertex,
-                attributes: &[
-                    wgpu::VertexAttribute {
-                        format: wgpu::VertexFormat::Float32x4,
-                        offset: offset_of![Vertex, pos] as u64,
-                        shader_location: 0,
-                    },
-                    wgpu::VertexAttribute {
-                        format: wgpu::VertexFormat::Float32x4,
-                        offset: offset_of! {Vertex, normal} as u64,
-                        shader_location: 1,
-                    },
-                    wgpu::VertexAttribute {
-                        format: wgpu::VertexFormat::Float32x2,
-                        offset: offset_of!(Vertex, tex_coord) as u64,
-                        shader_location: 2,
-                    },
-                ],
-            }];
-
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: None,
-                bind_group_layouts: &[&bind_group_layout, &Chunk::get_bind_group_layout(&device)],
+                bind_group_layouts: &[
+                    &BindGroup0::get_layout(device),
+                    &BindGroup1::get_layout(&device),
+                ],
                 push_constant_ranges: &[],
             });
 
@@ -184,7 +117,7 @@ impl Example {
                 vertex: wgpu::VertexState {
                     module: &shader,
                     entry_point: "vs_main",
-                    buffers: &vertex_buffers,
+                    buffers: &VertexFormat::LAYOUT,
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
@@ -293,10 +226,10 @@ impl Example {
                 pass.push_debug_group("Prepare data for draw.");
                 {
                     pass.set_pipeline(&self.pipeline);
-                    pass.set_bind_group(0, &self.bind_group, &[]);
-                    pass.set_bind_group(1, &chunk.bind_group, &[]);
-                    pass.set_index_buffer(chunk.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                    pass.set_vertex_buffer(0, chunk.vertex_buffer.slice(..));
+                    pass.set_bind_group(0, &self.bind_group.bind_group, &[]);
+                    pass.set_bind_group(1, &chunk.bind_group.bind_group, &[]);
+                    pass.set_index_buffer(chunk.vertex_format.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                    pass.set_vertex_buffer(0, chunk.vertex_format.vertex_buffer.slice(..));
                 }
                 pass.pop_debug_group();
                 pass.insert_debug_marker("Draw!");

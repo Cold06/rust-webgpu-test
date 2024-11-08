@@ -13,6 +13,7 @@ mod multimath;
 mod paint_utils;
 mod window;
 mod video;
+mod pipelines;
 
 use crate::camera_utils::process_camera_input;
 use crate::example::Example;

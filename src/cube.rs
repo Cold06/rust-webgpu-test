@@ -1,26 +1,7 @@
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use noise::{NoiseFn, Perlin};
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-pub struct Vertex {
-    pub pos: [f32; 4],
-    pub normal: [f32; 4],
-    pub tex_coord: [f32; 2],
-}
-
-fn vertex(pos: [f32; 3], normal: [i8; 3], tc: [i8; 2]) -> Vertex {
-    Vertex {
-        pos: [pos[0] as f32, pos[1] as f32, pos[2] as f32, 1.0],
-        normal: [normal[0] as f32, normal[1] as f32, normal[2] as f32, 0.0],
-        tex_coord: [tc[0] as f32, tc[1] as f32],
-    }
-}
-
-pub struct ModelBundle {
-    pub vertex_data: Vec<Vertex>,
-    pub index_data: Vec<u32>,
-}
+use crate::pipelines::{vertex, ModelBundle, Vertex};
 
 struct GenModel {
     pub vertex_data: Vec<Vertex>,
