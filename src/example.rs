@@ -56,26 +56,20 @@ impl Example {
         self.bind_group.update_globals(queue, camera);
     }
 
-    pub fn render(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, view: &SView) {
-        let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-
-        {
-            let mut pass = view.render_pass(&mut encoder);
-
-            for chunk in &self.chunks {
-                pass.set_pipeline(&self.pipeline.pipeline);
-                pass.set_bind_group(0, &self.bind_group.bind_group, &[]);
-                pass.set_bind_group(1, &chunk.bind_group.bind_group, &[]);
-                pass.set_index_buffer(
-                    chunk.vertex_format.index_buffer.slice(..),
-                    wgpu::IndexFormat::Uint32,
-                );
-                pass.set_vertex_buffer(0, chunk.vertex_format.vertex_buffer.slice(..));
-                pass.draw_indexed(0..chunk.index_count as u32, 0, 0..1);
-            }
+    pub fn render<'a>(
+        &'a mut self,
+        pass: &mut wgpu::RenderPass<'a>,
+    ) {
+        for chunk in &self.chunks {
+            pass.set_pipeline(&self.pipeline.pipeline);
+            pass.set_bind_group(0, &self.bind_group.bind_group, &[]);
+            pass.set_bind_group(1, &chunk.bind_group.bind_group, &[]);
+            pass.set_index_buffer(
+                chunk.vertex_format.index_buffer.slice(..),
+                wgpu::IndexFormat::Uint32,
+            );
+            pass.set_vertex_buffer(0, chunk.vertex_format.vertex_buffer.slice(..));
+            pass.draw_indexed(0..chunk.index_count as u32, 0, 0..1);
         }
-
-        queue.submit(Some(encoder.finish()));
     }
 }

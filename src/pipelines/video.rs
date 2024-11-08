@@ -1,23 +1,20 @@
 use crate::camera::Camera;
 use crate::multimath::{Mat4, Vec4};
-use bytemuck::{Pod, Zeroable};
+use bytemuck::{NoUninit, Pod, Zeroable};
 use std::mem::offset_of;
 use wgpu::util::DeviceExt;
-use wgpu::Device;
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable, Default)]
 pub struct Vertex {
     pub pos: [f32; 4],
-    pub normal: [f32; 4],
     pub tex_coord: [f32; 2],
 }
 
 impl Vertex {
-    pub fn new(pos: [f32; 3], normal: [i8; 3], tc: [i8; 2]) -> Vertex {
+    pub fn new(pos: [f32; 3], tc: [i8; 2]) -> Vertex {
         Vertex {
             pos: [pos[0], pos[1], pos[2], 1.0],
-            normal: [normal[0] as f32, normal[1] as f32, normal[2] as f32, 0.0],
             tex_coord: [tc[0] as f32, tc[1] as f32],
         }
     }
@@ -31,6 +28,7 @@ pub struct ModelBundle {
 pub struct VertexFormat {
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
+    pub index_count: u32,
 }
 
 impl VertexFormat {
@@ -44,14 +42,9 @@ impl VertexFormat {
                 shader_location: 0,
             },
             wgpu::VertexAttribute {
-                format: wgpu::VertexFormat::Float32x4,
-                offset: offset_of! {Vertex, normal} as u64,
-                shader_location: 1,
-            },
-            wgpu::VertexAttribute {
                 format: wgpu::VertexFormat::Float32x2,
                 offset: offset_of!(Vertex, tex_coord) as u64,
-                shader_location: 2,
+                shader_location: 1,
             },
         ],
     }];
@@ -72,6 +65,7 @@ impl VertexFormat {
         Self {
             index_buffer,
             vertex_buffer,
+            index_count: model_bundle.index_data.len() as u32,
         }
     }
 }
@@ -79,6 +73,71 @@ impl VertexFormat {
 pub struct BindGroup0 {
     pub bind_group: wgpu::BindGroup,
     uniform_buffer: wgpu::Buffer,
+    texture_view: wgpu::TextureView,
+    sampler: wgpu::Sampler,
+    texture: wgpu::Texture,
+    width: u32,
+    height: u32,
+}
+
+impl BindGroup0 {
+
+    pub fn update_texture<T: NoUninit>(&self, queue: &wgpu::Queue, data: &[T])  {
+        let texture_extent = wgpu::Extent3d {
+            width: self.width,
+            height: self.height,
+            depth_or_array_layers: 1,
+        };
+
+        queue.write_texture(
+            self.texture.as_image_copy(),
+            bytemuck::cast_slice(data),
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(self.width * 4),
+                rows_per_image: None,
+            },
+            texture_extent,
+        );
+    }
+    pub(crate) fn resize_textures(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, width: u32, height: u32) {
+        let texture_extent = wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        };
+
+        self.texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size: texture_extent,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::R8Unorm,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::COPY_SRC
+                | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[wgpu::TextureFormat::R8Unorm],
+        });
+
+        self.texture_view = self.texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        queue.write_texture(
+            self.texture.as_image_copy(),
+            bytemuck::cast_slice(&vec![0u32; (width * height) as usize]),
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(width * 4),
+                rows_per_image: None,
+            },
+            texture_extent,
+        );
+
+        println!("Texture resized");
+
+        self.bind_group = Self::generate_bind_group(&device, &self.uniform_buffer, &self.texture_view, &self.sampler);
+    }
 }
 
 impl BindGroup0 {
@@ -122,10 +181,10 @@ impl BindGroup0 {
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(&camera.matrix));
     }
 
-    pub fn create(device: &wgpu::Device, queue: &wgpu::Queue, size: u32, texels: Vec<u8>) -> Self {
+    pub fn create(device: &wgpu::Device, queue: &wgpu::Queue, width: u32, height: u32) -> Self {
         let texture_extent = wgpu::Extent3d {
-            width: size,
-            height: size,
+            width,
+            height,
             depth_or_array_layers: 1,
         };
 
@@ -135,23 +194,26 @@ impl BindGroup0 {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[wgpu::TextureFormat::Rgba8Unorm],
+            format: wgpu::TextureFormat::R8Unorm,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::COPY_SRC
+                | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[wgpu::TextureFormat::R8Unorm],
         });
+
+        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         queue.write_texture(
             texture.as_image_copy(),
-            &texels,
+            bytemuck::cast_slice(&vec![0u32; (width * height) as usize]),
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(size * 4),
+                bytes_per_row: Some(width * 4),
                 rows_per_image: None,
             },
             texture_extent,
         );
-
-        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
@@ -159,18 +221,33 @@ impl BindGroup0 {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
+        // TODO: both needs to be at the same place
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("Texture sampler"),
+            label: None,
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Nearest,
-            min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Linear,
+            mag_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         });
 
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let bind_group = Self::generate_bind_group(device, &uniform_buffer, &texture_view, &sampler);
+
+        Self {
+            bind_group,
+            uniform_buffer,
+            texture_view,
+            texture,
+            sampler,
+            width,
+            height,
+        }
+    }
+
+    fn generate_bind_group(device: &wgpu::Device, uniform_buffer: &wgpu::Buffer, texture_view: &wgpu::TextureView, sampler: &wgpu::Sampler) -> wgpu::BindGroup {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &Self::get_layout(device),
             entries: &[
                 wgpu::BindGroupEntry {
@@ -187,12 +264,7 @@ impl BindGroup0 {
                 },
             ],
             label: None,
-        });
-
-        Self {
-            bind_group,
-            uniform_buffer,
-        }
+        })
     }
 }
 
@@ -244,8 +316,8 @@ pub struct Pipeline {
 }
 
 impl Pipeline {
-    pub fn create(device: &Device, format: wgpu::TextureFormat) -> Self {
-        let shader = device.create_shader_module(wgpu::include_wgsl!("./quad_mesh.wgsl"));
+    pub fn create(device: &wgpu::Device, format: wgpu::TextureFormat) -> Self {
+        let shader = device.create_shader_module(wgpu::include_wgsl!("./video.wgsl"));
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,

@@ -14,6 +14,7 @@ mod paint_utils;
 mod pipelines;
 mod video;
 mod window;
+mod video_example;
 
 use crate::camera_utils::process_camera_input;
 use crate::example::Example;
@@ -38,6 +39,7 @@ use winit::{
 use crate::camera::Camera;
 use crate::camera_controller::CameraController;
 use crate::multimath::{Vec2, Vec3};
+use crate::video_example::VideoExample;
 
 fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
@@ -84,6 +86,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         &queue,
     );
 
+    let mut video_example = VideoExample::create(
+        &window.surface_configuration,
+        &device,
+        &queue,
+    );
+
     let mut example_size: [f32; 2] = [640.0, 480.0];
     let example_texture_id = {
         let texture_config = imgui_wgpu::TextureConfig {
@@ -122,19 +130,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     camera_controller.copy_camera_rotation(&camera_debug);
 
     event_loop.run(|event, window_target| {
-        if let Ok(frame) = b.try_recv() {
-            match frame {
-                PipelineEvent::Data(frame) => match frame.data {
-                    FrameData::PlanarYuv420(planes) => {
-                        println!("Got frame {:?} Y {}", frame.pts, planes.y_plane[0]);
-                    }
-                },
-                PipelineEvent::EOS => {
-                    println!("Got end of stream");
-                }
-            }
-        }
-
         window_target.set_control_flow(ControlFlow::Poll);
 
         let imgui_io = gui.imgui.io();
@@ -217,15 +212,54 @@ fn main() -> Result<(), Box<dyn Error>> {
                     let ui = gui.imgui.frame();
                     example.update(ui.io().delta_time);
                     example.setup_dynamic_camera(&queue, &camera);
+                    video_example.setup_dynamic_camera(&queue, &camera);
+
+
+
+
+                    if let Ok(event) = b.try_recv() {
+                        match event {
+                            PipelineEvent::Data(frame) => {
+
+                                video_example.check_resize(&device, &queue, frame.resolution);
+
+                                match frame.data {
+                                    FrameData::PlanarYuv420(planes) => {
+                                        video_example.update_texture(&queue, &planes.y_plane);
+                                    }
+                                }
+                            },
+                            PipelineEvent::EOS => {
+                                println!("Got end of stream");
+                            }
+                        }
+                    }
+
+
+                    //
+
 
                     let color_view = &frame
                         .texture
                         .create_view(&wgpu::TextureViewDescriptor::default());
 
-                    let depth_view = &surface_depth.depth_stencil
-                        .create_view(&wgpu::TextureViewDescriptor::default());
+                    {
+                        let depth_view = &surface_depth.depth_stencil
+                            .create_view(&wgpu::TextureViewDescriptor::default());
 
-                    example.render(&device, &queue, &SView::new(color_view, depth_view));
+                        let mut encoder =
+                            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+                        {
+                            let mut view = SView::new(color_view, depth_view);
+                            let mut pass = view.render_pass(&mut encoder);
+
+                            example.render(&mut pass);
+                            video_example.render(&mut pass);
+                        }
+
+                        queue.submit(Some(encoder.finish()));
+                    }
 
                     let mut new_example_size: Option<[f32; 2]> = None;
 
@@ -323,18 +357,32 @@ fn main() -> Result<(), Box<dyn Error>> {
                             .update_camera(&mut camera_debug, delta);
                         camera_debug.compute();
                         example.setup_dynamic_camera(&queue, &camera_debug);
+                        video_example.setup_dynamic_camera(&queue, &camera_debug);
 
-                        let color_view = gui
-                            .renderer
-                            .textures
-                            .get(example_texture_id)
-                            .unwrap()
-                            .view();
+                        {
+                            let color_view = gui
+                                .renderer
+                                .textures
+                                .get(example_texture_id)
+                                .unwrap()
+                                .view();
 
-                        let depth_view = &imgui_view_depth.depth_stencil
-                            .create_view(&wgpu::TextureViewDescriptor::default());
+                            let depth_view = &imgui_view_depth.depth_stencil
+                                .create_view(&wgpu::TextureViewDescriptor::default());
 
-                        example.render(&device, &queue, &SView::new(color_view, depth_view));
+                            let mut encoder =
+                                device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+                            {
+                                let mut view = SView::new(color_view, depth_view);
+                                let mut pass = view.render_pass(&mut encoder);
+
+                                example.render(&mut pass);
+                                video_example.render(&mut pass);
+                            }
+
+                            queue.submit(Some(encoder.finish()));
+                        }
                     }
 
                     gui.platform.prepare_render(&ui, &window.window);
