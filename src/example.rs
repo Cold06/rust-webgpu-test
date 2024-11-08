@@ -13,7 +13,6 @@ use wgpu::{Device, Face, PrimitiveTopology};
 pub struct Example {
     chunks: Vec<Chunk>,
     bind_group: BindGroup0,
-    uniform_buffer: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
     time: f32,
     pub depth_texture_main: wgpu::Texture,
@@ -45,59 +44,10 @@ impl Example {
         let mut camera_controller_debug = CameraController::new(200.0, 0.004);
         camera_controller.copy_camera_rotation(&camera_debug);
 
-        let texture_view = {
-            let fractal_size = 256u32;
-            let texels = create_texels(fractal_size as usize);
+        let fractal_size = 256u32;
+        let texels = create_texels(fractal_size as usize);
 
-            let texture_extent = wgpu::Extent3d {
-                width: fractal_size,
-                height: fractal_size,
-                depth_or_array_layers: 1,
-            };
-
-            let texture = device.create_texture(&wgpu::TextureDescriptor {
-                label: None,
-                size: texture_extent,
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8Unorm,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                view_formats: &[wgpu::TextureFormat::Rgba8Unorm],
-            });
-
-            queue.write_texture(
-                texture.as_image_copy(),
-                &texels,
-                wgpu::ImageDataLayout {
-                    offset: 0,
-                    bytes_per_row: Some(fractal_size * 4),
-                    rows_per_image: None,
-                },
-                texture_extent,
-            );
-
-            texture.create_view(&wgpu::TextureViewDescriptor::default())
-        };
-
-        let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Uniform Buffer"),
-            contents: bytemuck::bytes_of(&Mat4::new()),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("Texture sampler"),
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Nearest,
-            min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::FilterMode::Nearest,
-            ..Default::default()
-        });
-
-        let bind_group = BindGroup0::create(device, &uniform_buf, &texture_view, &sampler);
+        let bind_group = BindGroup0::create(device, queue, fractal_size, texels);
 
         let pipeline = {
             let shader = device.create_shader_module(wgpu::include_wgsl!("../resources/cube.wgsl"));
@@ -149,7 +99,6 @@ impl Example {
             last_spawn_x: 1,
             chunks: vec![],
             bind_group,
-            uniform_buffer: uniform_buf,
             pipeline,
             time: 0.0,
             camera,
@@ -181,7 +130,7 @@ impl Example {
     }
 
     pub fn setup_dynamic_camera(&self, queue: &wgpu::Queue, camera: &Camera) {
-        queue.write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(&camera.matrix));
+        self.bind_group.update_globals(queue, camera);
     }
 
     pub fn render(
