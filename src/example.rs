@@ -1,8 +1,6 @@
 use crate::camera::Camera;
-use crate::camera_controller::CameraController;
 use crate::chunk::Chunk;
 use crate::gpu::SView;
-use crate::multimath::{Vec2, Vec3};
 use crate::paint_utils::create_texels;
 use crate::pipelines::quad_mesh;
 
@@ -11,10 +9,6 @@ pub struct Example {
     bind_group: quad_mesh::BindGroup0,
     pipeline: quad_mesh::Pipeline,
     time: f32,
-    pub camera_controller: CameraController,
-    pub camera_controller_debug: CameraController,
-    pub camera: Camera,
-    pub camera_debug: Camera,
     pub last_spawn_x: i32,
 }
 
@@ -23,26 +17,11 @@ impl Example {
         config: &wgpu::SurfaceConfiguration,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        size: (f32, f32),
     ) -> Self {
-        let camera = Camera::new(
-            Vec3::from_components(27.0, 30.0, -11.0),
-            Vec2::from_components(1.04, -0.58),
-            size.0,
-            size.1,
-        );
-        let camera_debug = Camera::new(Vec3::new(), Vec2::new(), size.0, size.1);
-
-        let mut camera_controller = CameraController::new(20.0, 0.004);
-        camera_controller.copy_camera_rotation(&camera);
-        let mut camera_controller_debug = CameraController::new(200.0, 0.004);
-        camera_controller.copy_camera_rotation(&camera_debug);
-
         let fractal_size = 256u32;
         let texels = create_texels(fractal_size as usize);
 
         let bind_group = quad_mesh::BindGroup0::create(device, queue, fractal_size, texels);
-
         let pipeline = quad_mesh::Pipeline::create(device, config.format);
 
         let mut e = Example {
@@ -51,10 +30,6 @@ impl Example {
             bind_group,
             pipeline,
             time: 0.0,
-            camera,
-            camera_debug,
-            camera_controller,
-            camera_controller_debug,
         };
 
         e.spawn_chunk(&device);

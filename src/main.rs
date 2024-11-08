@@ -36,6 +36,9 @@ use winit::{
     keyboard::{Key, NamedKey},
     window::CursorGrabMode,
 };
+use crate::camera::Camera;
+use crate::camera_controller::CameraController;
+use crate::multimath::{Vec2, Vec3};
 
 fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
@@ -80,7 +83,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         &window.surface_configuration,
         &device,
         &queue,
-        (size.width as f32, size.height as f32),
     );
 
     let mut example_size: [f32; 2] = [640.0, 480.0];
@@ -112,6 +114,13 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut imgui_view_depth = ViewTarget::create(&device, 512u32, 512u32);
 
+    let mut camera = Camera::new(Vec3::new(), Vec2::new(), size.width as f32, size.height as f32);
+    let mut camera_controller = CameraController::new(20.0, 0.004);
+    camera_controller.copy_camera_rotation(&camera);
+
+    let mut camera_debug = Camera::new(Vec3::new(), Vec2::new(), size.width as f32, size.height as f32);
+    let mut camera_controller_debug = CameraController::new(200.0, 0.004);
+    camera_controller.copy_camera_rotation(&camera_debug);
 
     event_loop.run(|event, window_target| {
         if let Ok(frame) = b.try_recv() {
@@ -133,9 +142,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         let imgui_wants_mouse = imgui_io.want_capture_mouse;
 
         if use_debug_camera {
-            process_camera_input(focused, event.clone(), &mut example.camera_controller_debug);
+            process_camera_input(focused, event.clone(), &mut camera_controller_debug);
         } else {
-            process_camera_input(focused, event.clone(), &mut example.camera_controller);
+            process_camera_input(focused, event.clone(), &mut camera_controller);
         }
 
         match event {
@@ -148,7 +157,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                     window.re_configure(&device);
 
-                    example.camera.resize(size.width as f32, size.height as f32);
+                    camera.resize(size.width as f32, size.height as f32);
                 }
                 WindowEvent::CloseRequested => {
                     window_target.exit();
@@ -189,11 +198,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                     gui.imgui.io_mut().update_delta_time(delta);
 
-                    example
-                        .camera_controller
-                        .update_camera(&mut example.camera, delta);
+                    camera_controller
+                        .update_camera(&mut camera, delta);
 
-                    example.camera.compute();
+                    camera.compute();
 
                     gui.platform
                         .prepare_frame(gui.imgui.io_mut(), &window.window)
@@ -209,7 +217,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                     let ui = gui.imgui.frame();
                     example.update(ui.io().delta_time);
-                    example.setup_dynamic_camera(&queue, &example.camera);
+                    example.setup_dynamic_camera(&queue, &camera);
 
                     let color_view = &frame
                         .texture
@@ -264,23 +272,23 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 "Main Camera {}",
                                 if !use_debug_camera { "(active)" } else { "" }
                             ));
-                            ui.text(format!("   X {}", example.camera.view.position.x));
-                            ui.text(format!("   Y {}", example.camera.view.position.y));
-                            ui.text(format!("   Z {}", example.camera.view.position.z));
-                            ui.text(format!("   Pitch {}", example.camera.view.yaw_pitch.x));
-                            ui.text(format!("   Yaw {}", example.camera.view.yaw_pitch.y));
+                            ui.text(format!("   X {}", camera.view.position.x));
+                            ui.text(format!("   Y {}", camera.view.position.y));
+                            ui.text(format!("   Z {}", camera.view.position.z));
+                            ui.text(format!("   Pitch {}", camera.view.yaw_pitch.x));
+                            ui.text(format!("   Yaw {}", camera.view.yaw_pitch.y));
                             ui.text(format!(
                                 "Debug Camera {}",
                                 if use_debug_camera { "(active)" } else { "" }
                             ));
-                            ui.text(format!("   X {}", example.camera_debug.view.position.x));
-                            ui.text(format!("   Y {}", example.camera_debug.view.position.y));
-                            ui.text(format!("   Z {}", example.camera_debug.view.position.z));
+                            ui.text(format!("   X {}", camera_debug.view.position.x));
+                            ui.text(format!("   Y {}", camera_debug.view.position.y));
+                            ui.text(format!("   Z {}", camera_debug.view.position.z));
                             ui.text(format!(
                                 "   Pitch {}",
-                                example.camera_debug.view.yaw_pitch.x
+                                camera_debug.view.yaw_pitch.x
                             ));
-                            ui.text(format!("   Yaw {}", example.camera_debug.view.yaw_pitch.y));
+                            ui.text(format!("   Yaw {}", camera_debug.view.yaw_pitch.y));
                         });
 
                     if let Some(size) = new_example_size {
@@ -302,8 +310,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 imgui_wgpu::Texture::new(&device, &gui.renderer, texture_config),
                             );
 
-                            example
-                                .camera_debug
+                            camera_debug
                                 .resize(example_size[0] * scale[0], example_size[1] * scale[1]);
 
                             imgui_view_depth.resize(
@@ -313,11 +320,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                             );
                         }
 
-                        example
-                            .camera_controller_debug
-                            .update_camera(&mut example.camera_debug, delta);
-                        example.camera_debug.compute();
-                        example.setup_dynamic_camera(&queue, &example.camera_debug);
+                        camera_controller_debug
+                            .update_camera(&mut camera_debug, delta);
+                        camera_debug.compute();
+                        example.setup_dynamic_camera(&queue, &camera_debug);
 
                         let color_view = gui
                             .renderer
