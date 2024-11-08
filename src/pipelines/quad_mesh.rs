@@ -13,11 +13,13 @@ pub struct Vertex {
     pub tex_coord: [f32; 2],
 }
 
-pub fn vertex(pos: [f32; 3], normal: [i8; 3], tc: [i8; 2]) -> Vertex {
-    Vertex {
-        pos: [pos[0] as f32, pos[1] as f32, pos[2] as f32, 1.0],
-        normal: [normal[0] as f32, normal[1] as f32, normal[2] as f32, 0.0],
-        tex_coord: [tc[0] as f32, tc[1] as f32],
+impl Vertex {
+    pub fn new(pos: [f32; 3], normal: [i8; 3], tc: [i8; 2]) -> Vertex {
+        Vertex {
+            pos: [pos[0], pos[1], pos[2], 1.0],
+            normal: [normal[0] as f32, normal[1] as f32, normal[2] as f32, 0.0],
+            tex_coord: [tc[0] as f32, tc[1] as f32],
+        }
     }
 }
 
