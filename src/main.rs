@@ -18,7 +18,6 @@ mod window;
 use crate::camera_utils::process_camera_input;
 use crate::example::Example;
 use crate::gpu::{SView, ViewTarget};
-use crate::gpu_utils::build_depth_texture;
 use crate::gui::Gui;
 use crate::gui_utils::GUICanvas;
 use crate::video::{start, FrameData, PipelineEvent};
