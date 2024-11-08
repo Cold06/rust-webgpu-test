@@ -1,10 +1,10 @@
 use crate::camera::Camera;
 use crate::camera_controller::CameraController;
 use crate::chunk::Chunk;
-use crate::pipelines::quad_mesh;
 use crate::gpu_utils::build_depth_texture;
 use crate::multimath::{Vec2, Vec3};
 use crate::paint_utils::create_texels;
+use crate::pipelines::quad_mesh;
 use wgpu::Device;
 
 pub struct Example {
@@ -101,48 +101,54 @@ impl Example {
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         {
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: None,
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: color_view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
-                            a: 1.0,
-                        }),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: depth_view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: wgpu::StoreOp::Store,
-                    }),
-                    stencil_ops: None,
-                }),
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
+            let mut pass = render_pass(&mut encoder, color_view, depth_view);
 
             for chunk in &self.chunks {
-                pass.push_debug_group("Prepare data for draw.");
-                {
-                    pass.set_pipeline(&self.pipeline.pipeline);
-                    pass.set_bind_group(0, &self.bind_group.bind_group, &[]);
-                    pass.set_bind_group(1, &chunk.bind_group.bind_group, &[]);
-                    pass.set_index_buffer(chunk.vertex_format.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                    pass.set_vertex_buffer(0, chunk.vertex_format.vertex_buffer.slice(..));
-                }
-                pass.pop_debug_group();
-                pass.insert_debug_marker("Draw!");
+                pass.set_pipeline(&self.pipeline.pipeline);
+                pass.set_bind_group(0, &self.bind_group.bind_group, &[]);
+                pass.set_bind_group(1, &chunk.bind_group.bind_group, &[]);
+                pass.set_index_buffer(
+                    chunk.vertex_format.index_buffer.slice(..),
+                    wgpu::IndexFormat::Uint32,
+                );
+                pass.set_vertex_buffer(0, chunk.vertex_format.vertex_buffer.slice(..));
                 pass.draw_indexed(0..chunk.index_count as u32, 0, 0..1);
             }
         }
 
         queue.submit(Some(encoder.finish()));
     }
+}
+
+fn render_pass<'pass>(
+    encoder: &'pass mut wgpu::CommandEncoder,
+    color_view: &'pass wgpu::TextureView,
+    depth_view: &'pass wgpu::TextureView,
+) -> wgpu::RenderPass<'pass> {
+    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: None,
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view: color_view,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color {
+                    r: 0.0,
+                    g: 0.0,
+                    b: 0.0,
+                    a: 0.0,
+                }),
+                store: wgpu::StoreOp::Store,
+            },
+        })],
+        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+            view: depth_view,
+            depth_ops: Some(wgpu::Operations {
+                load: wgpu::LoadOp::Clear(1.0),
+                store: wgpu::StoreOp::Store,
+            }),
+            stencil_ops: None,
+        }),
+        timestamp_writes: None,
+        occlusion_query_set: None,
+    })
 }
