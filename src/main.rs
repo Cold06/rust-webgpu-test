@@ -11,15 +11,17 @@ mod gui;
 mod gui_utils;
 mod multimath;
 mod paint_utils;
-mod window;
-mod video;
 mod pipelines;
+mod video;
+mod window;
 
 use crate::camera_utils::process_camera_input;
 use crate::example::Example;
+use crate::gpu::SView;
 use crate::gpu_utils::build_depth_texture;
 use crate::gui::Gui;
 use crate::gui_utils::GUICanvas;
+use crate::video::{start, FrameData, PipelineEvent};
 use crate::window::OSWindow;
 use imgui::*;
 use imgui_wgpu;
@@ -34,12 +36,15 @@ use winit::{
     keyboard::{Key, NamedKey},
     window::CursorGrabMode,
 };
-use crate::video::{start, FrameData, PipelineEvent};
 
 fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
 
-    let (a, b) = start(Path::new("/Users/cold/Desktop/YP-1R-05x13.mp4").canonicalize().unwrap());
+    let (a, b) = start(
+        Path::new("/Users/cold/Desktop/YP-1R-05x13.mp4")
+            .canonicalize()
+            .unwrap(),
+    );
 
     let event_loop = EventLoop::new()?;
 
@@ -104,16 +109,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut square_dist = 0.0;
 
     event_loop.run(|event, window_target| {
-
         if let Ok(frame) = b.try_recv() {
             match frame {
-                PipelineEvent::Data(frame) => {
-                    match frame.data {
-                        FrameData::PlanarYuv420(planes) => {
-                            println!("Got frame {:?} Y {}", frame.pts, planes.y_plane[0]);
-                        }
+                PipelineEvent::Data(frame) => match frame.data {
+                    FrameData::PlanarYuv420(planes) => {
+                        println!("Got frame {:?} Y {}", frame.pts, planes.y_plane[0]);
                     }
-                }
+                },
                 PipelineEvent::EOS => {
                     println!("Got end of stream");
                 }
@@ -201,18 +203,19 @@ fn main() -> Result<(), Box<dyn Error>> {
                         }
                     };
 
-                    let view = frame
-                        .texture
-                        .create_view(&wgpu::TextureViewDescriptor::default());
-
-                    let main_depth_view = example
-                        .depth_texture_main
-                        .create_view(&wgpu::TextureViewDescriptor::default());
-
                     let ui = gui.imgui.frame();
                     example.update(ui.io().delta_time);
                     example.setup_dynamic_camera(&queue, &example.camera);
-                    example.render(&view, &main_depth_view, &device, &queue);
+
+                    let color_view = &frame
+                        .texture
+                        .create_view(&wgpu::TextureViewDescriptor::default());
+
+                    let depth_view = &example
+                        .depth_texture_main
+                        .create_view(&wgpu::TextureViewDescriptor::default());
+
+                    example.render(&device, &queue, &SView::new(color_view, depth_view));
 
                     let mut new_example_size: Option<[f32; 2]> = None;
 
@@ -315,22 +318,22 @@ fn main() -> Result<(), Box<dyn Error>> {
                         example.camera_debug.compute();
                         example.setup_dynamic_camera(&queue, &example.camera_debug);
 
-                        example.render(
-                            gui.renderer
-                                .textures
-                                .get(example_texture_id)
-                                .unwrap()
-                                .view(),
-                            &example
-                                .depth_texture_secondary
-                                .create_view(&wgpu::TextureViewDescriptor::default()),
-                            &device,
-                            &queue,
-                        );
+                        let color_view = gui
+                            .renderer
+                            .textures
+                            .get(example_texture_id)
+                            .unwrap()
+                            .view();
+
+                        let depth_view = &example
+                            .depth_texture_secondary
+                            .create_view(&wgpu::TextureViewDescriptor::default());
+
+                        example.render(&device, &queue, &SView::new(color_view, depth_view));
                     }
 
                     gui.platform.prepare_render(&ui, &window.window);
-                    gui.render(&device, &queue, &view);
+                    gui.render(&device, &queue, color_view);
 
                     frame.present();
                 }

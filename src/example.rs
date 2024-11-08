@@ -1,11 +1,11 @@
 use crate::camera::Camera;
 use crate::camera_controller::CameraController;
 use crate::chunk::Chunk;
+use crate::gpu::SView;
 use crate::gpu_utils::build_depth_texture;
 use crate::multimath::{Vec2, Vec3};
 use crate::paint_utils::create_texels;
 use crate::pipelines::quad_mesh;
-use wgpu::Device;
 
 pub struct Example {
     chunks: Vec<Chunk>,
@@ -71,7 +71,7 @@ impl Example {
         e
     }
 
-    pub fn spawn_chunk(&mut self, device: &Device) {
+    pub fn spawn_chunk(&mut self, device: &wgpu::Device) {
         for x in 0..8 {
             for y in 0..6 {
                 for z in 0..8 {
@@ -90,18 +90,12 @@ impl Example {
         self.bind_group.update_globals(queue, camera);
     }
 
-    pub fn render(
-        &mut self,
-        color_view: &wgpu::TextureView,
-        depth_view: &wgpu::TextureView,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-    ) {
+    pub fn render(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, view: &SView) {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         {
-            let mut pass = render_pass(&mut encoder, color_view, depth_view);
+            let mut pass = view.render_pass(&mut encoder);
 
             for chunk in &self.chunks {
                 pass.set_pipeline(&self.pipeline.pipeline);
@@ -118,37 +112,4 @@ impl Example {
 
         queue.submit(Some(encoder.finish()));
     }
-}
-
-fn render_pass<'pass>(
-    encoder: &'pass mut wgpu::CommandEncoder,
-    color_view: &'pass wgpu::TextureView,
-    depth_view: &'pass wgpu::TextureView,
-) -> wgpu::RenderPass<'pass> {
-    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-        label: None,
-        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-            view: color_view,
-            resolve_target: None,
-            ops: wgpu::Operations {
-                load: wgpu::LoadOp::Clear(wgpu::Color {
-                    r: 0.0,
-                    g: 0.0,
-                    b: 0.0,
-                    a: 0.0,
-                }),
-                store: wgpu::StoreOp::Store,
-            },
-        })],
-        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-            view: depth_view,
-            depth_ops: Some(wgpu::Operations {
-                load: wgpu::LoadOp::Clear(1.0),
-                store: wgpu::StoreOp::Store,
-            }),
-            stencil_ops: None,
-        }),
-        timestamp_writes: None,
-        occlusion_query_set: None,
-    })
 }
