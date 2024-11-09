@@ -1,8 +1,9 @@
 use imgui::{Context, FontConfig, FontSource};
 use imgui_wgpu::Renderer;
 use imgui_winit_support::WinitPlatform;
-use wgpu::{Device, Queue, TextureFormat, TextureView};
+use wgpu::{TextureFormat, TextureView};
 use winit::window::Window;
+use crate::gpu::GPUCtx;
 
 pub struct Gui {
     pub imgui: Context,
@@ -13,8 +14,7 @@ pub struct Gui {
 impl Gui {
     pub fn new(
         window: &Window,
-        device: &Device,
-        queue: &Queue,
+        ctx: &GPUCtx,
         frame_buffer_format: TextureFormat,
     ) -> Self {
         let mut imgui = Context::create();
@@ -43,8 +43,8 @@ impl Gui {
 
         let renderer = Renderer::new(
             &mut imgui,
-            &device,
-            &queue,
+            &ctx.device,
+            &ctx.queue,
             imgui_wgpu::RendererConfig {
                 texture_format: frame_buffer_format,
                 ..Default::default()
@@ -58,10 +58,10 @@ impl Gui {
         }
     }
 
-    pub fn render(&mut self, device: &Device, queue: &Queue, main_view: &TextureView) {
+    pub fn render(&mut self, ctx: &GPUCtx, main_view: &TextureView) {
         {
             let mut encoder: wgpu::CommandEncoder =
-                device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+                ctx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
@@ -79,12 +79,12 @@ impl Gui {
             });
 
             self.renderer
-                .render(self.imgui.render(), &queue, &device, &mut pass)
+                .render(self.imgui.render(), &ctx.queue, &ctx.device, &mut pass)
                 .expect("Rendering failed");
 
             drop(pass);
 
-            queue.submit(Some(encoder.finish()));
+            ctx.queue.submit(Some(encoder.finish()));
         }
     }
 }

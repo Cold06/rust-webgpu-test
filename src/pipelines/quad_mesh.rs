@@ -1,9 +1,9 @@
 use crate::camera::Camera;
+use crate::gpu::GPUCtx;
 use crate::multimath::{Mat4, Vec4};
 use bytemuck::{Pod, Zeroable};
 use std::mem::offset_of;
 use wgpu::util::DeviceExt;
-use wgpu::Device;
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable, Default)]
@@ -56,18 +56,22 @@ impl VertexFormat {
         ],
     }];
 
-    pub fn create(device: &wgpu::Device, model_bundle: &ModelBundle) -> Self {
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: None,
-            contents: bytemuck::cast_slice(&model_bundle.vertex_data),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
+    pub fn create(ctx: &GPUCtx, model_bundle: &ModelBundle) -> Self {
+        let vertex_buffer = ctx
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: None,
+                contents: bytemuck::cast_slice(&model_bundle.vertex_data),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
 
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: None,
-            contents: bytemuck::cast_slice(&model_bundle.index_data),
-            usage: wgpu::BufferUsages::INDEX,
-        });
+        let index_buffer = ctx
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: None,
+                contents: bytemuck::cast_slice(&model_bundle.index_data),
+                usage: wgpu::BufferUsages::INDEX,
+            });
 
         Self {
             index_buffer,
@@ -114,22 +118,23 @@ impl BindGroup0 {
         ],
     };
 
-    pub fn get_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
-        device.create_bind_group_layout(&Self::LAYOUT)
+    pub fn get_layout(ctx: &GPUCtx) -> wgpu::BindGroupLayout {
+        ctx.device.create_bind_group_layout(&Self::LAYOUT)
     }
 
-    pub fn update_globals(&self, queue: &wgpu::Queue, camera: &Camera) {
-        queue.write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(&camera.matrix));
+    pub fn update_globals(&self, ctx: &GPUCtx, camera: &Camera) {
+        ctx.queue
+            .write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(&camera.matrix));
     }
 
-    pub fn create(device: &wgpu::Device, queue: &wgpu::Queue, size: u32, texels: Vec<u8>) -> Self {
+    pub fn create(ctx: &GPUCtx, size: u32, texels: Vec<u8>) -> Self {
         let texture_extent = wgpu::Extent3d {
             width: size,
             height: size,
             depth_or_array_layers: 1,
         };
 
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
+        let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             size: texture_extent,
             mip_level_count: 1,
@@ -140,7 +145,7 @@ impl BindGroup0 {
             view_formats: &[wgpu::TextureFormat::Rgba8Unorm],
         });
 
-        queue.write_texture(
+        ctx.queue.write_texture(
             texture.as_image_copy(),
             &texels,
             wgpu::ImageDataLayout {
@@ -153,13 +158,15 @@ impl BindGroup0 {
 
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: None,
-            contents: bytemuck::bytes_of(&Mat4::new()),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
+        let uniform_buffer = ctx
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: None,
+                contents: bytemuck::bytes_of(&Mat4::new()),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
 
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        let sampler = ctx.device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("Texture sampler"),
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
@@ -170,8 +177,8 @@ impl BindGroup0 {
             ..Default::default()
         });
 
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &Self::get_layout(device),
+        let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &Self::get_layout(ctx),
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -215,19 +222,21 @@ impl BindGroup1 {
         }],
     };
 
-    pub fn get_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
-        device.create_bind_group_layout(&Self::LAYOUT)
+    pub fn get_layout(ctx: &GPUCtx) -> wgpu::BindGroupLayout {
+        ctx.device.create_bind_group_layout(&Self::LAYOUT)
     }
 
-    pub fn create(device: &wgpu::Device, position: Vec4) -> Self {
-        let position_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: None,
-            contents: bytemuck::bytes_of(&position),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
+    pub fn create(ctx: &GPUCtx, position: Vec4) -> Self {
+        let position_buffer = ctx
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: None,
+                contents: bytemuck::bytes_of(&position),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
 
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &BindGroup1::get_layout(device),
+        let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &BindGroup1::get_layout(ctx),
             label: None,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
@@ -244,46 +253,49 @@ pub struct Pipeline {
 }
 
 impl Pipeline {
-    pub fn create(device: &Device, format: wgpu::TextureFormat) -> Self {
-        let shader = device.create_shader_module(wgpu::include_wgsl!("./quad_mesh.wgsl"));
+    pub fn create(ctx: &GPUCtx, format: wgpu::TextureFormat) -> Self {
+        let shader = ctx
+            .device
+            .create_shader_module(wgpu::include_wgsl!("./quad_mesh.wgsl"));
 
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[
-                &BindGroup0::get_layout(device),
-                &BindGroup1::get_layout(device),
-            ],
-            push_constant_ranges: &[],
-        });
+        let pipeline_layout = ctx
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: None,
+                bind_group_layouts: &[&BindGroup0::get_layout(ctx), &BindGroup1::get_layout(ctx)],
+                push_constant_ranges: &[],
+            });
 
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: None,
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: "vs_main",
-                buffers: &VertexFormat::LAYOUT,
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: "fs_main",
-                targets: &[Some(format.into())],
-            }),
-            primitive: wgpu::PrimitiveState {
-                cull_mode: Some(wgpu::Face::Back),
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                ..Default::default()
-            },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: wgpu::TextureFormat::Depth32Float,
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState::default(),
-                depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::Less,
-            }),
-            multisample: wgpu::MultisampleState::default(),
-            multiview: None,
-        });
+        let pipeline = ctx
+            .device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: None,
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: "vs_main",
+                    buffers: &VertexFormat::LAYOUT,
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: "fs_main",
+                    targets: &[Some(format.into())],
+                }),
+                primitive: wgpu::PrimitiveState {
+                    cull_mode: Some(wgpu::Face::Back),
+                    topology: wgpu::PrimitiveTopology::TriangleList,
+                    ..Default::default()
+                },
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: wgpu::TextureFormat::Depth32Float,
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState::default(),
+                    depth_write_enabled: true,
+                    depth_compare: wgpu::CompareFunction::Less,
+                }),
+                multisample: wgpu::MultisampleState::default(),
+                multiview: None,
+            });
 
         Self { pipeline }
     }

@@ -1,3 +1,4 @@
+use crate::gpu::GPUCtx;
 use crate::gpu_utils::build_depth_texture;
 
 pub struct ViewTarget {
@@ -5,14 +6,14 @@ pub struct ViewTarget {
 }
 
 impl ViewTarget {
-    pub fn create(device: &wgpu::Device, width: u32, height: u32) -> Self {
+    pub fn create(ctx: &GPUCtx, width: u32, height: u32) -> Self {
         Self {
-            depth_stencil: build_depth_texture(device, (width, height)),
+            depth_stencil: build_depth_texture(ctx, (width, height)),
         }
     }
 
-    pub fn resize(&mut self, device: &wgpu::Device, width: u32, height: u32) {
-        self.depth_stencil = build_depth_texture(device, (width, height));
+    pub fn resize(&mut self, ctx: &GPUCtx, width: u32, height: u32) {
+        self.depth_stencil = build_depth_texture(ctx, (width, height));
     }
 }
 

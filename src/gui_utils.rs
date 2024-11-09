@@ -1,7 +1,7 @@
 use crate::canvas::Canvas;
 use imgui::TextureId;
 use imgui_wgpu::{Renderer, Texture};
-use wgpu::{Device, Queue};
+use crate::gpu::GPUCtx;
 
 pub struct GUICanvas {
     pub texture_id: TextureId,
@@ -11,7 +11,7 @@ pub struct GUICanvas {
 }
 
 impl GUICanvas {
-    pub fn new(renderer: &mut Renderer, device: &Device, size: [u32; 2]) -> Self {
+    pub fn new(renderer: &mut Renderer, ctx: &GPUCtx, size: [u32; 2]) -> Self {
         let texture_config = imgui_wgpu::TextureConfig {
             size: wgpu::Extent3d {
                 width: size[0],
@@ -21,7 +21,7 @@ impl GUICanvas {
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             ..Default::default()
         };
-        let texture = Texture::new(&device, &renderer, texture_config);
+        let texture = Texture::new(&ctx.device, &renderer, texture_config);
         let texture_id = renderer.textures.insert(texture);
 
         Self {
@@ -37,14 +37,14 @@ impl GUICanvas {
         implementation(&mut self.canvas);
     }
 
-    pub fn update(&mut self, renderer: &mut Renderer, queue: &Queue) {
+    pub fn update(&mut self, renderer: &mut Renderer, ctx: &GPUCtx) {
         if self.dirty {
             self.dirty = false;
             let buffer = self.canvas.as_bytes();
 
             if let Ok(buffer) = buffer {
                 if let Some(texture) = renderer.textures.get_mut(self.texture_id) {
-                    texture.write(queue, buffer.as_slice(), self.size[0], self.size[1]);
+                    texture.write(&ctx.queue, buffer.as_slice(), self.size[0], self.size[1]);
                 } else {
                     eprintln!("Failed to find texture with ID {:?}", self.texture_id);
                 }

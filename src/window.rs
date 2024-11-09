@@ -1,9 +1,10 @@
 use crate::gpu_utils::get_surface_configuration;
 use std::sync::Arc;
-use wgpu::{Device, Instance, Surface, SurfaceConfiguration};
+use wgpu::{Instance, Surface, SurfaceConfiguration};
 use winit::dpi::Size;
 use winit::event_loop::EventLoop;
 use winit::window::{Window, WindowBuilder};
+use crate::gpu::GPUCtx;
 
 pub struct OSWindow {
     pub window: Arc<Window>,
@@ -32,13 +33,13 @@ impl OSWindow {
         }
     }
 
-    pub fn init_configuration(&self, device: &Device) {
-        self.surface.configure(device, &self.surface_configuration);
+    pub fn init_configuration(&self, ctx: &GPUCtx) {
+        self.surface.configure(&ctx.device, &self.surface_configuration);
     }
 
-    pub fn re_configure(&mut self, device: &Device) {
+    pub fn re_configure(&mut self, ctx: &GPUCtx) {
         let size = self.window.inner_size();
         self.surface_configuration = get_surface_configuration(size);
-        self.init_configuration(device);
+        self.init_configuration(ctx);
     }
 }

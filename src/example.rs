@@ -1,6 +1,6 @@
 use crate::camera::Camera;
 use crate::chunk::Chunk;
-use crate::gpu::SView;
+use crate::gpu::GPUCtx;
 use crate::paint_utils::create_texels;
 use crate::pipelines::quad_mesh;
 
@@ -15,14 +15,13 @@ pub struct Example {
 impl Example {
     pub fn init(
         config: &wgpu::SurfaceConfiguration,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        ctx: &GPUCtx,
     ) -> Self {
         let fractal_size = 256u32;
         let texels = create_texels(fractal_size as usize);
 
-        let bind_group = quad_mesh::BindGroup0::create(device, queue, fractal_size, texels);
-        let pipeline = quad_mesh::Pipeline::create(device, config.format);
+        let bind_group = quad_mesh::BindGroup0::create(ctx, fractal_size, texels);
+        let pipeline = quad_mesh::Pipeline::create(ctx, config.format);
 
         let mut e = Example {
             last_spawn_x: 1,
@@ -32,16 +31,16 @@ impl Example {
             time: 0.0,
         };
 
-        e.spawn_chunk(&device);
+        e.spawn_chunk(&ctx);
 
         e
     }
 
-    pub fn spawn_chunk(&mut self, device: &wgpu::Device) {
+    pub fn spawn_chunk(&mut self, ctx: &GPUCtx) {
         for x in 0..8 {
             for y in 0..6 {
                 for z in 0..8 {
-                    let chunk = Chunk::new(device, x, y, z);
+                    let chunk = Chunk::new(ctx, x, y, z);
                     self.chunks.push(chunk);
                 }
             }
@@ -52,8 +51,8 @@ impl Example {
         self.time += delta_time;
     }
 
-    pub fn setup_dynamic_camera(&self, queue: &wgpu::Queue, camera: &Camera) {
-        self.bind_group.update_globals(queue, camera);
+    pub fn setup_dynamic_camera(&self, ctx: &GPUCtx, camera: &Camera) {
+        self.bind_group.update_globals(ctx, camera);
     }
 
     pub fn render<'a>(

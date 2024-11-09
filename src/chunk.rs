@@ -1,8 +1,7 @@
 use crate::cube::generate_full_mesh;
 use crate::multimath::Vec4;
 use crate::pipelines::quad_mesh;
-use wgpu::util::DeviceExt;
-use wgpu::Device;
+use crate::gpu::GPUCtx;
 
 pub struct Chunk {
     pub vertex_format: quad_mesh::VertexFormat,
@@ -11,13 +10,13 @@ pub struct Chunk {
 }
 
 impl Chunk {
-    pub fn new(device: &Device, x: i32, y: i32, z: i32) -> Self {
+    pub fn new(ctx: &GPUCtx, x: i32, y: i32, z: i32) -> Self {
         let model = generate_full_mesh(x * 16, y * 16, z * 16);
 
-        let vertex_format = quad_mesh::VertexFormat::create(device, &model);
+        let vertex_format = quad_mesh::VertexFormat::create(ctx, &model);
 
         let bind_group = quad_mesh::BindGroup1::create(
-            device,
+            ctx,
             Vec4::from_components(x as f32 * 32.0, y as f32 * 32.0, z as f32 * 32.0, 0.0),
         );
 

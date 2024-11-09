@@ -1,5 +1,6 @@
 use bytemuck::NoUninit;
 use crate::camera::Camera;
+use crate::gpu::GPUCtx;
 use crate::multimath::Vec4;
 use crate::pipelines::video;
 use crate::video::Resolution;
@@ -33,15 +34,14 @@ fn generate_quad() -> video::ModelBundle {
 
 impl VideoExample {
     pub fn create(
+        ctx: &GPUCtx,
         config: &wgpu::SurfaceConfiguration,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
     ) -> Self {
-        let bind_group_0 = video::BindGroup0::create(device, queue, 512, 521);
-        let bind_group_1 = video::BindGroup1::create(device, Vec4::new());
-        let pipeline = video::Pipeline::create(device, config.format);
+        let bind_group_0 = video::BindGroup0::create(ctx, 512, 521);
+        let bind_group_1 = video::BindGroup1::create(ctx, Vec4::new());
+        let pipeline = video::Pipeline::create(ctx, config.format);
 
-        let vertex_format = video::VertexFormat::create(device, &generate_quad());
+        let vertex_format = video::VertexFormat::create(ctx, &generate_quad());
 
         Self {
             width: 512,
@@ -53,20 +53,20 @@ impl VideoExample {
         }
     }
 
-    pub fn update_texture<T: NoUninit>(&self, queue: &wgpu::Queue, y_data: &[T],u_data: &[T],v_data: &[T]) {
-        self.bind_group_0.update_texture(queue, y_data, u_data, v_data);
+    pub fn update_texture<T: NoUninit>(&self, ctx: &GPUCtx, y_data: &[T],u_data: &[T],v_data: &[T]) {
+        self.bind_group_0.update_texture(ctx, y_data, u_data, v_data);
     }
 
-    pub(crate) fn check_resize(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, resolution: Resolution) {
+    pub(crate) fn check_resize(&mut self, ctx: &GPUCtx, resolution: Resolution) {
         if (resolution.width != self.width as usize) || (resolution.height != self.height as usize) {
-            self.bind_group_0.resize_textures(device, queue, resolution.width as u32, resolution.height as u32);
+            self.bind_group_0.resize_textures(ctx, resolution.width as u32, resolution.height as u32);
             self.width = resolution.width as u32;
             self.height = resolution.height as u32;
         }
     }
 
-    pub fn setup_dynamic_camera(&self, queue: &wgpu::Queue, camera: &Camera) {
-        self.bind_group_0.update_globals(queue, camera);
+    pub fn setup_dynamic_camera(&self, ctx: &GPUCtx, camera: &Camera) {
+        self.bind_group_0.update_globals(ctx, camera);
     }
 
     pub fn render<'a>(&'a mut self, pass: &mut wgpu::RenderPass<'a>) {

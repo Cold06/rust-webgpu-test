@@ -18,19 +18,16 @@ mod video_example;
 
 use crate::camera_utils::process_camera_input;
 use crate::example::Example;
-use crate::gpu::{SView, ViewTarget};
+use crate::gpu::{GPUCtx, SView, ViewTarget};
 use crate::gui::Gui;
 use crate::gui_utils::GUICanvas;
 use crate::video::{start, FrameData, PipelineEvent};
-use crate::window::OSWindow;
 use imgui::*;
 use imgui_wgpu;
-use pollster::block_on;
 use std::error::Error;
 use std::path::Path;
 use std::time::Instant;
 use winit::{
-    dpi::LogicalSize,
     event::{ElementState, Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     keyboard::{Key, NamedKey},
@@ -52,44 +49,23 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let event_loop = EventLoop::new()?;
 
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-        backends: wgpu::Backends::PRIMARY,
-        ..Default::default()
-    });
-
-    let size = LogicalSize::new(1280.0, 720.0);
-    let mut window = OSWindow::new(&event_loop, &instance, size);
-
-    let adapter = block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-        power_preference: wgpu::PowerPreference::HighPerformance,
-        compatible_surface: Some(&window.surface),
-        force_fallback_adapter: false,
-    }))
-    .unwrap();
-
-    let (device, queue) =
-        block_on(adapter.request_device(&wgpu::DeviceDescriptor::default(), None)).unwrap();
-
-    window.init_configuration(&device);
+    let (ctx, mut window) = GPUCtx::new(&event_loop);
 
     let mut gui = Gui::new(
         &window.window,
-        &device,
-        &queue,
+        &ctx,
         window.surface_configuration.format,
     );
 
     let size = window.window.inner_size();
     let mut example = Example::init(
         &window.surface_configuration,
-        &device,
-        &queue,
+        &ctx
     );
 
     let mut video_example = VideoExample::create(
+        &ctx,
         &window.surface_configuration,
-        &device,
-        &queue,
     );
 
     let mut example_size: [f32; 2] = [640.0, 480.0];
@@ -103,23 +79,23 @@ fn main() -> Result<(), Box<dyn Error>> {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             ..Default::default()
         };
-        let texture = imgui_wgpu::Texture::new(&device, &gui.renderer, texture_config);
+        let texture = imgui_wgpu::Texture::new(&ctx.device, &gui.renderer, texture_config);
         gui.renderer.textures.insert(texture)
     };
 
-    let mut example_canvas = GUICanvas::new(&mut gui.renderer, &device, [250, 250]);
+    let mut example_canvas = GUICanvas::new(&mut gui.renderer, &ctx, [250, 250]);
 
     example_canvas.with(|ctx| ctx.fill_rect(0.0, 0.0, 100.0, 100.0));
-    example_canvas.update(&mut gui.renderer, &queue);
+    example_canvas.update(&mut gui.renderer, &ctx);
 
     let mut focused = false;
     let mut last_frame = Instant::now();
     let mut use_debug_camera = false;
     let mut square_dist = 0.0;
 
-    let mut surface_depth = ViewTarget::create(&device, size.width, size.height);
+    let mut surface_depth = ViewTarget::create(&ctx, size.width, size.height);
 
-    let mut imgui_view_depth = ViewTarget::create(&device, 512u32, 512u32);
+    let mut imgui_view_depth = ViewTarget::create(&ctx, 512u32, 512u32);
 
     let mut camera = Camera::new(Vec3::from_components(-2.0, 0.0, 0.0), Vec2::new(), size.width as f32, size.height as f32);
     let mut camera_controller = CameraController::new(20.0, 0.004);
@@ -147,9 +123,9 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
             Event::WindowEvent { ref event, .. } => match event {
                 WindowEvent::Resized(size) => {
-                    surface_depth.resize(&device, size.width, size.height);
+                    surface_depth.resize(&ctx, size.width, size.height);
 
-                    window.re_configure(&device);
+                    window.re_configure(&ctx);
 
                     camera.resize(size.width as f32, size.height as f32);
                 }
@@ -211,8 +187,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                     let ui = gui.imgui.frame();
                     example.update(ui.io().delta_time);
-                    example.setup_dynamic_camera(&queue, &camera);
-                    video_example.setup_dynamic_camera(&queue, &camera);
+                    example.setup_dynamic_camera(&ctx, &camera);
+                    video_example.setup_dynamic_camera(&ctx, &camera);
 
 
 
@@ -221,11 +197,11 @@ fn main() -> Result<(), Box<dyn Error>> {
                         match event {
                             PipelineEvent::Data(frame) => {
 
-                                video_example.check_resize(&device, &queue, frame.resolution);
+                                video_example.check_resize(&ctx, frame.resolution);
 
                                 match frame.data {
                                     FrameData::PlanarYuv420(planes) => {
-                                        video_example.update_texture(&queue, &planes.y_plane, &planes.u_plane, &planes.v_plane);
+                                        video_example.update_texture(&ctx, &planes.y_plane, &planes.u_plane, &planes.v_plane);
                                     }
                                 }
                             },
@@ -248,7 +224,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                             .create_view(&wgpu::TextureViewDescriptor::default());
 
                         let mut encoder =
-                            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+                            ctx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
                         {
                             let mut view = SView::new(color_view, depth_view);
@@ -258,7 +234,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                             video_example.render(&mut pass);
                         }
 
-                        queue.submit(Some(encoder.finish()));
+                        ctx.queue.submit(Some(encoder.finish()));
                     }
 
                     let mut new_example_size: Option<[f32; 2]> = None;
@@ -285,7 +261,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                                     100.0 + square_dist,
                                 )
                             });
-                            example_canvas.update(&mut gui.renderer, &queue);
+                            example_canvas.update(&mut gui.renderer, &ctx);
                         }
                     });
 
@@ -293,7 +269,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         .size([170.0, 260.0], Condition::FirstUseEver)
                         .build(|| {
                             if ui.button("Spawn Chunk") {
-                                example.spawn_chunk(&device);
+                                example.spawn_chunk(&ctx);
                             }
                         });
 
@@ -340,14 +316,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                             };
                             gui.renderer.textures.replace(
                                 example_texture_id,
-                                imgui_wgpu::Texture::new(&device, &gui.renderer, texture_config),
+                                imgui_wgpu::Texture::new(&ctx.device, &gui.renderer, texture_config),
                             );
 
                             camera_debug
                                 .resize(example_size[0] * scale[0], example_size[1] * scale[1]);
 
                             imgui_view_depth.resize(
-                                &device,
+                                &ctx,
                                 (example_size[0] * scale[0]) as u32,
                                 (example_size[1] * scale[1]) as u32,
                             );
@@ -356,8 +332,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                         camera_controller_debug
                             .update_camera(&mut camera_debug, delta);
                         camera_debug.compute();
-                        example.setup_dynamic_camera(&queue, &camera_debug);
-                        video_example.setup_dynamic_camera(&queue, &camera_debug);
+                        example.setup_dynamic_camera(&ctx, &camera_debug);
+                        video_example.setup_dynamic_camera(&ctx, &camera_debug);
 
                         {
                             let color_view = gui
@@ -371,7 +347,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 .create_view(&wgpu::TextureViewDescriptor::default());
 
                             let mut encoder =
-                                device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+                                ctx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
                             {
                                 let mut view = SView::new(color_view, depth_view);
@@ -381,12 +357,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 video_example.render(&mut pass);
                             }
 
-                            queue.submit(Some(encoder.finish()));
+                            ctx.queue.submit(Some(encoder.finish()));
                         }
                     }
 
                     gui.platform.prepare_render(&ui, &window.window);
-                    gui.render(&device, &queue, color_view);
+                    gui.render(&ctx, color_view);
 
                     frame.present();
                 }

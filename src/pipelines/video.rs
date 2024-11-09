@@ -3,6 +3,7 @@ use crate::multimath::{Mat4, Vec4};
 use bytemuck::{NoUninit, Pod, Zeroable};
 use std::mem::offset_of;
 use wgpu::util::DeviceExt;
+use crate::gpu::GPUCtx;
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable, Default)]
@@ -49,14 +50,14 @@ impl VertexFormat {
         ],
     }];
 
-    pub fn create(device: &wgpu::Device, model_bundle: &ModelBundle) -> Self {
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+    pub fn create(ctx: &GPUCtx, model_bundle: &ModelBundle) -> Self {
+        let vertex_buffer = ctx.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             contents: bytemuck::cast_slice(&model_bundle.vertex_data),
             usage: wgpu::BufferUsages::VERTEX,
         });
 
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let index_buffer = ctx.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             contents: bytemuck::cast_slice(&model_bundle.index_data),
             usage: wgpu::BufferUsages::INDEX,
@@ -93,14 +94,14 @@ pub struct BindGroup0 {
 }
 
 impl BindGroup0 {
-    pub fn update_texture<T: NoUninit>(&self, queue: &wgpu::Queue, y_data: &[T], u_data: &[T], v_data: &[T]) {
+    pub fn update_texture<T: NoUninit>(&self, ctx: &GPUCtx, y_data: &[T], u_data: &[T], v_data: &[T]) {
         let y_texture_extent = wgpu::Extent3d {
             width: self.y_width,
             height: self.y_height,
             depth_or_array_layers: 1,
         };
 
-        queue.write_texture(
+        ctx.queue.write_texture(
             self.y_texture.as_image_copy(),
             bytemuck::cast_slice(y_data),
             wgpu::ImageDataLayout {
@@ -117,7 +118,7 @@ impl BindGroup0 {
             depth_or_array_layers: 1,
         };
 
-        queue.write_texture(
+        ctx.queue.write_texture(
             self.u_texture.as_image_copy(),
             bytemuck::cast_slice(u_data),
             wgpu::ImageDataLayout {
@@ -128,7 +129,7 @@ impl BindGroup0 {
             uv_textures_extent,
         );
 
-        queue.write_texture(
+        ctx.queue.write_texture(
             self.v_texture.as_image_copy(),
             bytemuck::cast_slice(v_data),
             wgpu::ImageDataLayout {
@@ -141,8 +142,7 @@ impl BindGroup0 {
     }
     pub(crate) fn resize_textures(
         &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        ctx: &GPUCtx,
         width: u32,
         height: u32,
     ) {
@@ -168,7 +168,7 @@ impl BindGroup0 {
             depth_or_array_layers: 1,
         };
 
-        self.y_texture = device.create_texture(&wgpu::TextureDescriptor {
+        self.y_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             size: y_texture_extent,
             mip_level_count: 1,
@@ -186,7 +186,7 @@ impl BindGroup0 {
             .y_texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        queue.write_texture(
+        ctx.queue.write_texture(
             self.y_texture.as_image_copy(),
             bytemuck::cast_slice(&vec![0u32; (y_width * y_height) as usize]),
             wgpu::ImageDataLayout {
@@ -197,7 +197,7 @@ impl BindGroup0 {
             y_texture_extent,
         );
 
-        self.u_texture = device.create_texture(&wgpu::TextureDescriptor {
+        self.u_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             size: uv_textures_extent,
             mip_level_count: 1,
@@ -215,7 +215,7 @@ impl BindGroup0 {
             .u_texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        queue.write_texture(
+        ctx.queue.write_texture(
             self.u_texture.as_image_copy(),
             bytemuck::cast_slice(&vec![0u32; (uv_width * uv_height) as usize]),
             wgpu::ImageDataLayout {
@@ -227,7 +227,7 @@ impl BindGroup0 {
         );
 
 
-        self.v_texture = device.create_texture(&wgpu::TextureDescriptor {
+        self.v_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             size: uv_textures_extent,
             mip_level_count: 1,
@@ -245,7 +245,7 @@ impl BindGroup0 {
             .v_texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        queue.write_texture(
+        ctx.queue.write_texture(
             self.v_texture.as_image_copy(),
             bytemuck::cast_slice(&vec![0u32; (uv_width * uv_height) as usize]),
             wgpu::ImageDataLayout {
@@ -258,7 +258,7 @@ impl BindGroup0 {
 
 
         self.bind_group = Self::generate_bind_group(
-            &device,
+            ctx,
             &self.uniform_buffer,
             &self.sampler,
             &self.y_texture_view,
@@ -321,15 +321,15 @@ impl BindGroup0 {
         ],
     };
 
-    pub fn get_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
-        device.create_bind_group_layout(&Self::LAYOUT)
+    pub fn get_layout(ctx: &GPUCtx) -> wgpu::BindGroupLayout {
+        ctx.device.create_bind_group_layout(&Self::LAYOUT)
     }
 
-    pub fn update_globals(&self, queue: &wgpu::Queue, camera: &Camera) {
-        queue.write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(&camera.matrix));
+    pub fn update_globals(&self, ctx: &GPUCtx, camera: &Camera) {
+        ctx.queue.write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(&camera.matrix));
     }
 
-    pub fn create(device: &wgpu::Device, queue: &wgpu::Queue, width: u32, height: u32) -> Self {
+    pub fn create(ctx: &GPUCtx, width: u32, height: u32) -> Self {
         let y_width = width;
         let y_height = height;
 
@@ -343,7 +343,7 @@ impl BindGroup0 {
         };
 
         let (u_texture, u_texture_view) = {
-            let u_texture = device.create_texture(&wgpu::TextureDescriptor {
+            let u_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
                 label: None,
                 size: uv_textures_extent,
                 mip_level_count: 1,
@@ -359,7 +359,7 @@ impl BindGroup0 {
 
             let u_texture_view = u_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-            queue.write_texture(
+            ctx.queue.write_texture(
                 u_texture.as_image_copy(),
                 bytemuck::cast_slice(&vec![0u32; (uv_width * uv_height) as usize]),
                 wgpu::ImageDataLayout {
@@ -374,7 +374,7 @@ impl BindGroup0 {
         };
 
         let (v_texture, v_texture_view) = {
-            let v_texture = device.create_texture(&wgpu::TextureDescriptor {
+            let v_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
                 label: None,
                 size: uv_textures_extent,
                 mip_level_count: 1,
@@ -390,7 +390,7 @@ impl BindGroup0 {
 
             let v_texture_view = v_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-            queue.write_texture(
+            ctx.queue.write_texture(
                 v_texture.as_image_copy(),
                 bytemuck::cast_slice(&vec![0u32; (uv_width * uv_height) as usize]),
                 wgpu::ImageDataLayout {
@@ -410,7 +410,7 @@ impl BindGroup0 {
             depth_or_array_layers: 1,
         };
 
-        let y_texture = device.create_texture(&wgpu::TextureDescriptor {
+        let y_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             size: y_texture_extent,
             mip_level_count: 1,
@@ -426,7 +426,7 @@ impl BindGroup0 {
 
         let y_texture_view = y_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        queue.write_texture(
+        ctx.queue.write_texture(
             y_texture.as_image_copy(),
             bytemuck::cast_slice(&vec![0u32; (y_width * y_height) as usize]),
             wgpu::ImageDataLayout {
@@ -437,14 +437,14 @@ impl BindGroup0 {
             y_texture_extent,
         );
 
-        let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let uniform_buffer = ctx.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             contents: bytemuck::bytes_of(&Mat4::new()),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
         // TODO: both needs to be at the same place
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        let sampler = ctx.device.create_sampler(&wgpu::SamplerDescriptor {
             label: None,
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
@@ -456,7 +456,7 @@ impl BindGroup0 {
         });
 
         let bind_group = Self::generate_bind_group(
-            device,
+            ctx,
             &uniform_buffer,
             &sampler,
             &y_texture_view,
@@ -482,15 +482,15 @@ impl BindGroup0 {
     }
 
     fn generate_bind_group(
-        device: &wgpu::Device,
+        ctx: &GPUCtx,
         uniform_buffer: &wgpu::Buffer,
         sampler: &wgpu::Sampler,
         y_texture_view: &wgpu::TextureView,
         u_texture_view: &wgpu::TextureView,
         v_texture_view: &wgpu::TextureView,
     ) -> wgpu::BindGroup {
-        device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &Self::get_layout(device),
+        ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &Self::get_layout(ctx),
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -537,19 +537,19 @@ impl BindGroup1 {
         }],
     };
 
-    pub fn get_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
-        device.create_bind_group_layout(&Self::LAYOUT)
+    pub fn get_layout(ctx: &GPUCtx) -> wgpu::BindGroupLayout {
+        ctx.device.create_bind_group_layout(&Self::LAYOUT)
     }
 
-    pub fn create(device: &wgpu::Device, position: Vec4) -> Self {
-        let position_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+    pub fn create(ctx: &GPUCtx, position: Vec4) -> Self {
+        let position_buffer = ctx.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             contents: bytemuck::bytes_of(&position),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &BindGroup1::get_layout(device),
+        let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &BindGroup1::get_layout(ctx),
             label: None,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
@@ -566,19 +566,19 @@ pub struct Pipeline {
 }
 
 impl Pipeline {
-    pub fn create(device: &wgpu::Device, format: wgpu::TextureFormat) -> Self {
-        let shader = device.create_shader_module(wgpu::include_wgsl!("./video.wgsl"));
+    pub fn create(ctx: &GPUCtx, format: wgpu::TextureFormat) -> Self {
+        let shader = ctx.device.create_shader_module(wgpu::include_wgsl!("./video.wgsl"));
 
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        let pipeline_layout = ctx.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[
-                &BindGroup0::get_layout(device),
-                &BindGroup1::get_layout(device),
+                &BindGroup0::get_layout(ctx),
+                &BindGroup1::get_layout(ctx),
             ],
             push_constant_ranges: &[],
         });
 
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let pipeline = ctx.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {

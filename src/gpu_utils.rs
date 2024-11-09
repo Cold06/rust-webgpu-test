@@ -1,7 +1,8 @@
 use winit::dpi::PhysicalSize;
+use crate::gpu::GPUCtx;
 
-pub fn build_depth_texture(device: &wgpu::Device, size: (u32, u32)) -> wgpu::Texture {
-    device.create_texture(&wgpu::TextureDescriptor {
+pub fn build_depth_texture(ctx: &GPUCtx, size: (u32, u32)) -> wgpu::Texture {
+    ctx.device.create_texture(&wgpu::TextureDescriptor {
         label: Some("Main depth texture"),
         size: wgpu::Extent3d {
             width: size.0,
