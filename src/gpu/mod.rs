@@ -1,7 +1,7 @@
 mod ctx;
+mod view;
+mod texture;
 
 pub use ctx::*;
-
-mod view;
-
 pub use view::*;
+pub use texture::*;
