@@ -40,10 +40,10 @@ impl<'a> SView<'a> {
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.0,
-                        g: 0.0,
-                        b: 0.0,
-                        a: 0.0,
+                        r: 0.5,
+                        g: 0.4,
+                        b: 0.35,
+                        a: 1.0,
                     }),
                     store: wgpu::StoreOp::Store,
                 },

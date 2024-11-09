@@ -73,43 +73,104 @@ impl VertexFormat {
 pub struct BindGroup0 {
     pub bind_group: wgpu::BindGroup,
     uniform_buffer: wgpu::Buffer,
-    texture_view: wgpu::TextureView,
+
+    y_texture_view: wgpu::TextureView,
+    y_texture: wgpu::Texture,
+
+    u_texture_view: wgpu::TextureView,
+    u_texture: wgpu::Texture,
+
+    v_texture_view: wgpu::TextureView,
+    v_texture: wgpu::Texture,
+
     sampler: wgpu::Sampler,
-    texture: wgpu::Texture,
-    width: u32,
-    height: u32,
+
+    y_width: u32,
+    y_height: u32,
+
+    uv_width: u32,
+    uv_height: u32,
 }
 
 impl BindGroup0 {
-
-    pub fn update_texture<T: NoUninit>(&self, queue: &wgpu::Queue, data: &[T])  {
-        let texture_extent = wgpu::Extent3d {
-            width: self.width,
-            height: self.height,
+    pub fn update_texture<T: NoUninit>(&self, queue: &wgpu::Queue, y_data: &[T], u_data: &[T], v_data: &[T]) {
+        let y_texture_extent = wgpu::Extent3d {
+            width: self.y_width,
+            height: self.y_height,
             depth_or_array_layers: 1,
         };
 
         queue.write_texture(
-            self.texture.as_image_copy(),
-            bytemuck::cast_slice(data),
+            self.y_texture.as_image_copy(),
+            bytemuck::cast_slice(y_data),
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(self.width * 4),
-                rows_per_image: None,
+                bytes_per_row: Some(self.y_width),
+                rows_per_image: Some(self.y_height),
             },
-            texture_extent,
+            y_texture_extent,
         );
-    }
-    pub(crate) fn resize_textures(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, width: u32, height: u32) {
-        let texture_extent = wgpu::Extent3d {
-            width,
-            height,
+
+        let uv_textures_extent = wgpu::Extent3d {
+            width: self.uv_width,
+            height: self.uv_height,
             depth_or_array_layers: 1,
         };
 
-        self.texture = device.create_texture(&wgpu::TextureDescriptor {
+        queue.write_texture(
+            self.u_texture.as_image_copy(),
+            bytemuck::cast_slice(u_data),
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(self.uv_width),
+                rows_per_image: Some(self.uv_height),
+            },
+            uv_textures_extent,
+        );
+
+        queue.write_texture(
+            self.v_texture.as_image_copy(),
+            bytemuck::cast_slice(v_data),
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(self.uv_width),
+                rows_per_image: Some(self.uv_height),
+            },
+            uv_textures_extent,
+        );
+    }
+    pub(crate) fn resize_textures(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        width: u32,
+        height: u32,
+    ) {
+        let y_width = width;
+        let y_height = height;
+        self.y_width = width;
+        self.y_height = height;
+
+        let uv_width = width / 2;
+        let uv_height = height / 2;
+        self.uv_width = uv_width;
+        self.uv_height = uv_height;
+
+        let y_texture_extent = wgpu::Extent3d {
+            width: y_width,
+            height: y_height,
+            depth_or_array_layers: 1,
+        };
+
+        let uv_textures_extent = wgpu::Extent3d {
+            width: uv_width,
+            height: uv_height,
+            depth_or_array_layers: 1,
+        };
+
+        self.y_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: None,
-            size: texture_extent,
+            size: y_texture_extent,
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -121,22 +182,89 @@ impl BindGroup0 {
             view_formats: &[wgpu::TextureFormat::R8Unorm],
         });
 
-        self.texture_view = self.texture.create_view(&wgpu::TextureViewDescriptor::default());
+        self.y_texture_view = self
+            .y_texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
 
         queue.write_texture(
-            self.texture.as_image_copy(),
-            bytemuck::cast_slice(&vec![0u32; (width * height) as usize]),
+            self.y_texture.as_image_copy(),
+            bytemuck::cast_slice(&vec![0u32; (y_width * y_height) as usize]),
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(width * 4),
+                bytes_per_row: Some(y_width),
                 rows_per_image: None,
             },
-            texture_extent,
+            y_texture_extent,
         );
 
-        println!("Texture resized");
+        self.u_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size: uv_textures_extent,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::R8Unorm,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::COPY_SRC
+                | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[wgpu::TextureFormat::R8Unorm],
+        });
 
-        self.bind_group = Self::generate_bind_group(&device, &self.uniform_buffer, &self.texture_view, &self.sampler);
+        self.u_texture_view = self
+            .u_texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
+        queue.write_texture(
+            self.u_texture.as_image_copy(),
+            bytemuck::cast_slice(&vec![0u32; (uv_width * uv_height) as usize]),
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(uv_width),
+                rows_per_image: None,
+            },
+            uv_textures_extent,
+        );
+
+
+        self.v_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size: uv_textures_extent,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::R8Unorm,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::COPY_SRC
+                | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[wgpu::TextureFormat::R8Unorm],
+        });
+
+        self.v_texture_view = self
+            .v_texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
+        queue.write_texture(
+            self.v_texture.as_image_copy(),
+            bytemuck::cast_slice(&vec![0u32; (uv_width * uv_height) as usize]),
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(uv_width),
+                rows_per_image: None,
+            },
+            uv_textures_extent
+        );
+
+
+        self.bind_group = Self::generate_bind_group(
+            &device,
+            &self.uniform_buffer,
+            &self.sampler,
+            &self.y_texture_view,
+            &self.u_texture_view,
+            &self.v_texture_view,
+        );
     }
 }
 
@@ -157,6 +285,12 @@ impl BindGroup0 {
             wgpu::BindGroupLayoutEntry {
                 binding: 1,
                 visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::FRAGMENT,
                 ty: wgpu::BindingType::Texture {
                     multisampled: false,
                     sample_type: wgpu::TextureSampleType::Float { filterable: true },
@@ -165,9 +299,23 @@ impl BindGroup0 {
                 count: None,
             },
             wgpu::BindGroupLayoutEntry {
-                binding: 2,
+                binding: 3,
                 visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                ty: wgpu::BindingType::Texture {
+                    multisampled: false,
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 4,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    multisampled: false,
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                },
                 count: None,
             },
         ],
@@ -182,15 +330,89 @@ impl BindGroup0 {
     }
 
     pub fn create(device: &wgpu::Device, queue: &wgpu::Queue, width: u32, height: u32) -> Self {
-        let texture_extent = wgpu::Extent3d {
+        let y_width = width;
+        let y_height = height;
+
+        let uv_width = width / 2;
+        let uv_height = height / 2;
+
+        let uv_textures_extent = wgpu::Extent3d {
+            width: uv_width,
+            height: uv_height,
+            depth_or_array_layers: 1,
+        };
+
+        let (u_texture, u_texture_view) = {
+            let u_texture = device.create_texture(&wgpu::TextureDescriptor {
+                label: None,
+                size: uv_textures_extent,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::R8Unorm,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                    | wgpu::TextureUsages::COPY_DST
+                    | wgpu::TextureUsages::COPY_SRC
+                    | wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[wgpu::TextureFormat::R8Unorm],
+            });
+
+            let u_texture_view = u_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+            queue.write_texture(
+                u_texture.as_image_copy(),
+                bytemuck::cast_slice(&vec![0u32; (uv_width * uv_height) as usize]),
+                wgpu::ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(uv_width),
+                    rows_per_image: None,
+                },
+                uv_textures_extent,
+            );
+
+            (u_texture, u_texture_view)
+        };
+
+        let (v_texture, v_texture_view) = {
+            let v_texture = device.create_texture(&wgpu::TextureDescriptor {
+                label: None,
+                size: uv_textures_extent,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::R8Unorm,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                    | wgpu::TextureUsages::COPY_DST
+                    | wgpu::TextureUsages::COPY_SRC
+                    | wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[wgpu::TextureFormat::R8Unorm],
+            });
+
+            let v_texture_view = v_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+            queue.write_texture(
+                v_texture.as_image_copy(),
+                bytemuck::cast_slice(&vec![0u32; (uv_width * uv_height) as usize]),
+                wgpu::ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(uv_width),
+                    rows_per_image: None,
+                },
+                uv_textures_extent,
+            );
+
+            (v_texture, v_texture_view)
+        };
+
+        let y_texture_extent = wgpu::Extent3d {
             width,
             height,
             depth_or_array_layers: 1,
         };
 
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
+        let y_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: None,
-            size: texture_extent,
+            size: y_texture_extent,
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -202,17 +424,17 @@ impl BindGroup0 {
             view_formats: &[wgpu::TextureFormat::R8Unorm],
         });
 
-        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let y_texture_view = y_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         queue.write_texture(
-            texture.as_image_copy(),
-            bytemuck::cast_slice(&vec![0u32; (width * height) as usize]),
+            y_texture.as_image_copy(),
+            bytemuck::cast_slice(&vec![0u32; (y_width * y_height) as usize]),
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(width * 4),
+                bytes_per_row: Some(width),
                 rows_per_image: None,
             },
-            texture_extent,
+            y_texture_extent,
         );
 
         let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -233,20 +455,40 @@ impl BindGroup0 {
             ..Default::default()
         });
 
-        let bind_group = Self::generate_bind_group(device, &uniform_buffer, &texture_view, &sampler);
+        let bind_group = Self::generate_bind_group(
+            device,
+            &uniform_buffer,
+            &sampler,
+            &y_texture_view,
+            &u_texture_view,
+            &v_texture_view,
+        );
 
         Self {
             bind_group,
             uniform_buffer,
-            texture_view,
-            texture,
+            y_texture_view,
+            y_texture,
+            u_texture_view,
+            u_texture,
+            v_texture_view,
+            v_texture,
             sampler,
-            width,
-            height,
+            y_width,
+            y_height,
+            uv_width,
+            uv_height,
         }
     }
 
-    fn generate_bind_group(device: &wgpu::Device, uniform_buffer: &wgpu::Buffer, texture_view: &wgpu::TextureView, sampler: &wgpu::Sampler) -> wgpu::BindGroup {
+    fn generate_bind_group(
+        device: &wgpu::Device,
+        uniform_buffer: &wgpu::Buffer,
+        sampler: &wgpu::Sampler,
+        y_texture_view: &wgpu::TextureView,
+        u_texture_view: &wgpu::TextureView,
+        v_texture_view: &wgpu::TextureView,
+    ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &Self::get_layout(device),
             entries: &[
@@ -256,11 +498,19 @@ impl BindGroup0 {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&texture_view),
+                    resource: wgpu::BindingResource::Sampler(&sampler),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
+                    resource: wgpu::BindingResource::TextureView(&y_texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(&u_texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::TextureView(&v_texture_view),
                 },
             ],
             label: None,

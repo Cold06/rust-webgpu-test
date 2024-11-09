@@ -121,7 +121,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut imgui_view_depth = ViewTarget::create(&device, 512u32, 512u32);
 
-    let mut camera = Camera::new(Vec3::new(), Vec2::new(), size.width as f32, size.height as f32);
+    let mut camera = Camera::new(Vec3::from_components(-2.0, 0.0, 0.0), Vec2::new(), size.width as f32, size.height as f32);
     let mut camera_controller = CameraController::new(20.0, 0.004);
     camera_controller.copy_camera_rotation(&camera);
 
@@ -225,7 +225,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                                 match frame.data {
                                     FrameData::PlanarYuv420(planes) => {
-                                        video_example.update_texture(&queue, &planes.y_plane);
+                                        video_example.update_texture(&queue, &planes.y_plane, &planes.u_plane, &planes.v_plane);
                                     }
                                 }
                             },

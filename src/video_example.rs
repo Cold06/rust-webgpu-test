@@ -14,16 +14,18 @@ pub struct VideoExample {
 }
 
 fn generate_quad() -> video::ModelBundle {
-    let block_size = 1.0;
+    let s = 0.05;
+    let h = 1080.0 * s;
+    let w = 1920.0 * s;
 
-    let (x, y, z) = (0.0, 0.0, 0.0);
+    let (x, y, z) = (3.0, 0.0, 0.0);
 
     video::ModelBundle {
         vertex_data: vec![
-            video::Vertex::new([-block_size + x, -block_size + y,  block_size + z],  [1, 0]),
-            video::Vertex::new([-block_size + x,  block_size + y,  block_size + z],  [0, 0]),
-            video::Vertex::new([-block_size + x,  block_size + y, -block_size + z],  [0, 1]),
-            video::Vertex::new([-block_size + x, -block_size + y, -block_size + z],  [1, 1]),
+            video::Vertex::new([x, -h + y,  w + z],  [1, 1]),
+            video::Vertex::new([x,  h + y,  w + z],  [1, 0]),
+            video::Vertex::new([x,  h + y, -w + z],  [0, 0]),
+            video::Vertex::new([x, -h + y, -w + z],  [0, 1]),
         ],
         index_data: vec![0, 1, 2, 2, 3, 0],
     }
@@ -51,8 +53,8 @@ impl VideoExample {
         }
     }
 
-    pub fn update_texture<T: NoUninit>(&self, queue: &wgpu::Queue, data: &[T]) {
-        self.bind_group_0.update_texture(queue, data);
+    pub fn update_texture<T: NoUninit>(&self, queue: &wgpu::Queue, y_data: &[T],u_data: &[T],v_data: &[T]) {
+        self.bind_group_0.update_texture(queue, y_data, u_data, v_data);
     }
 
     pub(crate) fn check_resize(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, resolution: Resolution) {
