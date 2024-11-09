@@ -3,7 +3,7 @@ use crate::multimath::{Mat4, Vec4};
 use bytemuck::{NoUninit, Pod, Zeroable};
 use std::mem::offset_of;
 use wgpu::util::DeviceExt;
-use crate::gpu::{GPUCtx, GPUTexture};
+use crate::gpu::{GPUCtx, GPUSampler, GPUTexture};
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable, Default)]
@@ -79,7 +79,7 @@ pub struct BindGroup0 {
     u_texture: GPUTexture,
     v_texture: GPUTexture,
 
-    sampler: wgpu::Sampler,
+    sampler: GPUSampler,
 }
 
 impl BindGroup0 {
@@ -129,12 +129,7 @@ impl BindGroup0 {
                 },
                 count: None,
             },
-            wgpu::BindGroupLayoutEntry {
-                binding: 1,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                count: None,
-            },
+            GPUSampler::get_layout(1),
             GPUTexture::get_layout(2),
             GPUTexture::get_layout(3),
             GPUTexture::get_layout(4),
@@ -168,17 +163,7 @@ impl BindGroup0 {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        // TODO: both needs to be at the same place
-        let sampler = ctx.device.create_sampler(&wgpu::SamplerDescriptor {
-            label: None,
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            min_filter: wgpu::FilterMode::Linear,
-            mag_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Linear,
-            ..Default::default()
-        });
+        let sampler = GPUSampler::create(&ctx, wgpu::FilterMode::Linear, wgpu::AddressMode::ClampToEdge);
 
         let bind_group = Self::generate_bind_group(
             ctx,
@@ -202,7 +187,7 @@ impl BindGroup0 {
     fn generate_bind_group(
         ctx: &GPUCtx,
         uniform_buffer: &wgpu::Buffer,
-        sampler: &wgpu::Sampler,
+        sampler: &GPUSampler,
         y_texture_view: &GPUTexture,
         u_texture_view: &GPUTexture,
         v_texture_view: &GPUTexture,
@@ -214,10 +199,7 @@ impl BindGroup0 {
                     binding: 0,
                     resource: uniform_buffer.as_entire_binding(),
                 },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
+                sampler.get_binding(1),
                 y_texture_view.get_binding(2),
                 u_texture_view.get_binding(3),
                 v_texture_view.get_binding(4),
