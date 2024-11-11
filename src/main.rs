@@ -11,13 +11,13 @@ mod example;
 mod fs_utils;
 mod gpu;
 mod gpu_utils;
-mod gui;
 mod multimath;
 mod paint_utils;
 mod pipelines;
 mod video;
 mod video_example;
 mod window;
+mod gizmo_example;
 
 use crate::camera::Camera;
 use crate::camera_controller::CameraController;
@@ -43,6 +43,7 @@ use winit::{
     keyboard::{Key, NamedKey},
     window::CursorGrabMode,
 };
+use crate::gizmo_example::GizmoExample;
 
 #[repr(C)]
 #[derive(Pod, Copy, Clone, Zeroable)]
@@ -145,6 +146,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut focused = false;
     let mut last_frame = Instant::now();
     let mut use_debug_camera = false;
+
+    let mut gizmo_example = GizmoExample::new();
 
     event_loop.run(|event, window_target| {
         window_target.set_control_flow(ControlFlow::Poll);
@@ -298,6 +301,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                                     * scale_factor,
                             };
 
+                            egui::SidePanel::left("options_panel").show(egui_renderer.context(), |ui| {
+                                gizmo_example.draw_options(ui);
+                            });
+
                             egui::Window::new("Canvas Example")
                                 .default_size([512.0, 512.0])
                                 .resizable(true)
@@ -352,8 +359,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 .show(egui_renderer.context(), |ui| {
                                     ui.image(ImageSource::Texture(SizedTexture::new(
                                         example_texture_id,
-                                        [(size.width as f32) / 4.0, (size.height as f32) / 4.0],
+                                        [(size.width as f32) / 6.0, (size.height as f32) / 6.0],
                                     )));
+                                    gizmo_example.draw_gizmo(ui);
                                 });
 
                             egui::Window::new("Chunk Manager")
