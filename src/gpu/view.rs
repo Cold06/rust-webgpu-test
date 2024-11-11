@@ -1,5 +1,6 @@
 use crate::gpu::GPUCtx;
 use crate::gpu_utils::build_depth_texture;
+use egui_wgpu::wgpu;
 
 pub struct ViewTarget {
     pub depth_stencil: wgpu::Texture,

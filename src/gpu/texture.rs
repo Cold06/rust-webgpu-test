@@ -1,9 +1,10 @@
 use bytemuck::NoUninit;
+use egui_wgpu::wgpu;
 use crate::gpu::GPUCtx;
 
 pub struct GPUTexture {
-    texture: wgpu::Texture,
-    view: wgpu::TextureView,
+    pub texture: wgpu::Texture,
+    pub view: wgpu::TextureView,
     size: wgpu::Extent3d,
     format: wgpu::TextureFormat,
     usage: wgpu::TextureUsages,
@@ -18,8 +19,10 @@ fn get_bytes_per_row(format: wgpu::TextureFormat, width: u32) -> Option<u32> {
         wgpu::TextureFormat::Depth32Float => size_of::<f32>() * width,
         wgpu::TextureFormat::R8Unorm => size_of::<u8>() * width,
         wgpu::TextureFormat::Rgba8Unorm => 4 * size_of::<u8>() * width,
+        wgpu::TextureFormat::Rgba8UnormSrgb => 4 * size_of::<u8>() * width,
+        wgpu::TextureFormat::Bgra8UnormSrgb => 4 * size_of::<u8>() * width,
         _ => {
-            panic!("Unknown format {:?}", format);
+            panic!("[GPUTexture] Unknown format {:?}", format);
         }
     };
 

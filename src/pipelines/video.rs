@@ -2,6 +2,7 @@ use crate::camera::Camera;
 use crate::multimath::{Mat4, Vec4};
 use bytemuck::{NoUninit, Pod, Zeroable};
 use std::mem::offset_of;
+use egui_wgpu::wgpu;
 use wgpu::util::DeviceExt;
 use crate::gpu::{GPUCtx, GPUSampler, GPUTexture};
 
@@ -272,15 +273,18 @@ impl Pipeline {
         let pipeline = ctx.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
             layout: Some(&pipeline_layout),
+            cache: None,
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
                 buffers: &VertexFormat::LAYOUT,
+                compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_main",
                 targets: &[Some(format.into())],
+                compilation_options: Default::default(),
             }),
             primitive: wgpu::PrimitiveState {
                 cull_mode: Some(wgpu::Face::Back),

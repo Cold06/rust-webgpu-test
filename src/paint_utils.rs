@@ -7,7 +7,7 @@ fn map_range(value: f64) -> f64 {
 }
 
 pub fn create_texels(size: usize) -> Vec<u8> {
-    let mut canvas = Canvas::new(size as i32, size as i32);
+    let mut canvas = Canvas::new(size as u32, size as u32);
 
     canvas.set_fill_color(Color::RED);
     canvas.fill_rect(0.0, 0.0, size as f32, size as f32);

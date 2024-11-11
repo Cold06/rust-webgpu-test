@@ -3,14 +3,16 @@ use std::mem;
 use skia_safe::{surfaces, AlphaType, Color, Color4f, ColorType, Data, EncodedImageFormat, ImageInfo, Paint, PaintStyle, Path, Rect, Surface};
 
 pub struct Canvas {
+    width: u32,
+    height: u32,
     surface: Surface,
     path: Path,
     paint: Paint,
 }
 
 impl Canvas {
-    pub fn new(width: i32, height: i32) -> Canvas {
-        let mut surface = surfaces::raster_n32_premul((width, height)).expect("surface");
+    pub fn new(width: u32, height: u32) -> Canvas {
+        let mut surface = surfaces::raster_n32_premul((width as i32, height as i32)).expect("surface");
         let path = Path::new();
         let mut paint = Paint::default();
         paint.set_color(Color::BLACK);
@@ -21,6 +23,8 @@ impl Canvas {
             surface,
             path,
             paint,
+            width,
+            height,
         }
     }
 

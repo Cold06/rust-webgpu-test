@@ -4,6 +4,7 @@ use crate::gpu::GPUCtx;
 use crate::multimath::Vec4;
 use crate::pipelines::video;
 use crate::video::Resolution;
+use egui_wgpu::wgpu;
 
 pub struct VideoExample {
     bind_group_0: video::BindGroup0,

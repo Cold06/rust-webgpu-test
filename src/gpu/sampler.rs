@@ -1,4 +1,4 @@
-use wgpu::AddressMode;
+use egui_wgpu::wgpu;
 use crate::gpu::GPUCtx;
 
 pub struct GPUSampler {

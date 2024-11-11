@@ -1,5 +1,6 @@
 use winit::dpi::PhysicalSize;
 use crate::gpu::GPUCtx;
+use egui_wgpu::wgpu;
 
 pub fn build_depth_texture(ctx: &GPUCtx, size: (u32, u32)) -> wgpu::Texture {
     ctx.device.create_texture(&wgpu::TextureDescriptor {

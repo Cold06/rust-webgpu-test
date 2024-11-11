@@ -2,6 +2,7 @@ use std::rc::Rc;
 use pollster::block_on;
 use winit::dpi::LogicalSize;
 use winit::event_loop::EventLoop;
+use egui_wgpu::wgpu;
 use crate::window::OSWindow;
 
 #[derive(Debug)]
@@ -17,7 +18,7 @@ impl GPUCtx {
             ..Default::default()
         });
 
-        let size = LogicalSize::new(1280.0, 720.0);
+        let size = LogicalSize::new(1920, 1080);
         let mut window = OSWindow::new(&event_loop, &instance, size);
 
         let adapter = block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
@@ -38,5 +39,9 @@ impl GPUCtx {
         window.init_configuration(&ctx);
 
         (ctx, window)
+    }
+
+    pub(crate) fn force_sync(&self) {
+        self.queue.submit([]);
     }
 }

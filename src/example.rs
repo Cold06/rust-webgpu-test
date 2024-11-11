@@ -3,12 +3,12 @@ use crate::chunk::Chunk;
 use crate::gpu::GPUCtx;
 use crate::paint_utils::create_texels;
 use crate::pipelines::quad_mesh;
+use egui_wgpu::wgpu;
 
 pub struct Example {
     chunks: Vec<Chunk>,
     bind_group: quad_mesh::BindGroup0,
     pipeline: quad_mesh::Pipeline,
-    time: f32,
     pub last_spawn_x: i32,
 }
 
@@ -23,17 +23,12 @@ impl Example {
         let bind_group = quad_mesh::BindGroup0::create(ctx, fractal_size, texels);
         let pipeline = quad_mesh::Pipeline::create(ctx, config.format);
 
-        let mut e = Example {
+        Example {
             last_spawn_x: 1,
             chunks: vec![],
             bind_group,
             pipeline,
-            time: 0.0,
-        };
-
-        e.spawn_chunk(&ctx);
-
-        e
+        }
     }
 
     pub fn spawn_chunk(&mut self, ctx: &GPUCtx) {
@@ -45,10 +40,6 @@ impl Example {
                 }
             }
         }
-    }
-
-    pub fn update(&mut self, delta_time: f32) {
-        self.time += delta_time;
     }
 
     pub fn setup_dynamic_camera(&self, ctx: &GPUCtx, camera: &Camera) {
