@@ -5,14 +5,14 @@ use crate::paint_utils::create_texels;
 use crate::pipelines::quad_mesh;
 use egui_wgpu::wgpu;
 
-pub struct Example {
+pub struct ChunksDemo {
     chunks: Vec<Chunk>,
     bind_group: quad_mesh::BindGroup0,
     pipeline: quad_mesh::Pipeline,
     pub last_spawn_x: i32,
 }
 
-impl Example {
+impl ChunksDemo {
     pub fn init(
         config: &wgpu::SurfaceConfiguration,
         ctx: &GPUCtx,
@@ -23,7 +23,7 @@ impl Example {
         let bind_group = quad_mesh::BindGroup0::create(ctx, fractal_size, texels);
         let pipeline = quad_mesh::Pipeline::create(ctx, config.format);
 
-        Example {
+        ChunksDemo {
             last_spawn_x: 1,
             chunks: vec![],
             bind_group,

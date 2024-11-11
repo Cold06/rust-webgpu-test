@@ -6,7 +6,7 @@ use crate::pipelines::video;
 use crate::video::Resolution;
 use egui_wgpu::wgpu;
 
-pub struct VideoExample {
+pub struct VideoDemo {
     bind_group_0: video::BindGroup0,
     bind_group_1: video::BindGroup1,
     pipeline: video::Pipeline,
@@ -33,7 +33,7 @@ fn generate_quad() -> video::ModelBundle {
     }
 }
 
-impl VideoExample {
+impl VideoDemo {
     pub fn create(
         ctx: &GPUCtx,
         config: &wgpu::SurfaceConfiguration,
