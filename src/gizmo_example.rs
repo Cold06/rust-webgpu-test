@@ -1,8 +1,7 @@
 use crate::camera::Camera;
-use transform_gizmo_egui::math::{DMat4, DQuat, DVec3, Transform};
-use transform_gizmo_egui::{
-    EnumSet, Gizmo, GizmoConfig, GizmoExt, GizmoMode, GizmoOrientation, GizmoResult,
-};
+use transform_gizmo_egui::math::{DQuat, DVec3, Transform};
+use transform_gizmo_egui::{mint, EnumSet, Gizmo, GizmoConfig, GizmoExt, GizmoMode, GizmoOrientation, GizmoResult};
+use crate::multimath::dmat4_from_mat4;
 
 pub struct GizmoExample {
     gizmo: Gizmo,
@@ -29,34 +28,18 @@ impl GizmoExample {
         // The whole clipping area of the UI is used as viewport
         let viewport = ui.clip_rect();
 
-        let projection_matrix = DMat4::perspective_rh(
-            camera.projection.fov_y as f64,
-            camera.projection.aspect as f64,
-            camera.projection.z_near as f64,
-            camera.projection.z_far as f64,
-        );
-
-        // Fixed camera position
-        let view_matrix = DMat4::look_at_rh(
-            DVec3::new(
-                camera.view.position.x as f64,
-                camera.view.position.y as f64,
-                camera.view.position.z as f64,
-            ),
-            DVec3::new(
-                camera.view.center.x as f64,
-                camera.view.center.y as f64,
-                camera.view.center.z as f64,
-            ),
-            DVec3::Y,
-        );
-
         // Ctrl toggles snapping
         let snapping = ui.input(|input| input.modifiers.ctrl);
 
+        let v32 = camera.view.matrix;
+        let mut v64: mint::RowMatrix4<f64> = dmat4_from_mat4(v32).into();
+
+        let p32 = camera.projection.matrix;
+        let mut p64: mint::RowMatrix4<f64> = dmat4_from_mat4(p32).into();
+
         self.gizmo.update_config(GizmoConfig {
-            view_matrix: view_matrix.into(),
-            projection_matrix: projection_matrix.into(),
+            view_matrix: v64,
+            projection_matrix: p64,
             viewport,
             modes: self.gizmo_modes,
             orientation: self.gizmo_orientation,

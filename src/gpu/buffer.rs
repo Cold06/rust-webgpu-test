@@ -1,7 +1,7 @@
+use crate::gpu::GPUCtx;
 use bytemuck::{NoUninit, Pod};
 use egui_wgpu::wgpu;
 use egui_wgpu::wgpu::util::DeviceExt;
-use crate::gpu::GPUCtx;
 
 pub struct GPUBuffer {
     buffer: wgpu::Buffer,
@@ -14,7 +14,7 @@ pub enum BufferType {
     Index,
     Uniform,
     StorageRO,
-    StorageRW
+    StorageRW,
 }
 
 const fn get_visibility(ty: BufferType) -> wgpu::ShaderStages {
@@ -27,7 +27,7 @@ const fn get_visibility(ty: BufferType) -> wgpu::ShaderStages {
             let fragment = 1 << 1;
             let compute = 1 << 2;
             wgpu::ShaderStages::from_bits(vertex | fragment | compute).unwrap()
-        },
+        }
     }
 }
 
@@ -50,7 +50,7 @@ const fn get_usage(ty: BufferType) -> wgpu::BufferUsages {
             let copy_src = 1 << 2;
             let copy_dst = 1 << 3;
             wgpu::BufferUsages::from_bits(storage | copy_src | copy_dst).unwrap()
-        },
+        }
     }
 }
 
@@ -78,20 +78,24 @@ impl GPUBuffer {
         }
     }
 
-    pub fn create_init<T: NoUninit + Pod>(ctx: &GPUCtx, usage: wgpu::BufferUsages, init: &T) -> Self {
-        let buffer = ctx.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: None,
-            contents: bytemuck::bytes_of(init),
-            usage,
-        });
+    pub fn create_init<T: NoUninit + Pod>(
+        ctx: &GPUCtx,
+        usage: wgpu::BufferUsages,
+        init: &T,
+    ) -> Self {
+        let buffer = ctx
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: None,
+                contents: bytemuck::bytes_of(init),
+                usage,
+            });
 
-        Self {
-            buffer,
-            usage,
-        }
+        Self { buffer, usage }
     }
 
     pub fn update<T: NoUninit + Pod>(&self, ctx: &GPUCtx, data: &T) {
-        ctx.queue.write_buffer(&self.buffer, 0, bytemuck::bytes_of(data));
+        ctx.queue
+            .write_buffer(&self.buffer, 0, bytemuck::bytes_of(data));
     }
 }

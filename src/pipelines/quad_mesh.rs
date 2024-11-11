@@ -1,11 +1,11 @@
 use crate::camera::Camera;
 use crate::gpu::GPUCtx;
-use crate::multimath::{Mat4, Vec4};
+use crate::multimath::{Mat4Bytes, Vec4Bytes};
 use bytemuck::{Pod, Zeroable};
-use std::mem::offset_of;
 use egui_wgpu::wgpu;
+use glam::*;
+use std::mem::offset_of;
 use wgpu::util::DeviceExt;
-
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable, Default)]
@@ -126,7 +126,7 @@ impl BindGroup0 {
 
     pub fn update_globals(&self, ctx: &GPUCtx, camera: &Camera) {
         ctx.queue
-            .write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(&camera.matrix));
+            .write_buffer(&self.uniform_buffer, 0, Mat4Bytes(camera.matrix).as_bytes());
     }
 
     pub fn create(ctx: &GPUCtx, size: u32, texels: Vec<u8>) -> Self {
@@ -164,7 +164,7 @@ impl BindGroup0 {
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: None,
-                contents: bytemuck::bytes_of(&Mat4::new()),
+                contents: Mat4Bytes(Mat4::IDENTITY).as_bytes(),
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             });
 
@@ -233,7 +233,7 @@ impl BindGroup1 {
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: None,
-                contents: bytemuck::bytes_of(&position),
+                contents: Vec4Bytes(position).as_bytes(),
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             });
 

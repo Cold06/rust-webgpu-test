@@ -13,10 +13,7 @@ pub struct ChunksDemo {
 }
 
 impl ChunksDemo {
-    pub fn init(
-        config: &wgpu::SurfaceConfiguration,
-        ctx: &GPUCtx,
-    ) -> Self {
+    pub fn create(config: &wgpu::SurfaceConfiguration, ctx: &GPUCtx) -> Self {
         let fractal_size = 256u32;
         let texels = create_texels(fractal_size as usize);
 
@@ -46,10 +43,7 @@ impl ChunksDemo {
         self.bind_group.update_globals(ctx, camera);
     }
 
-    pub fn render<'a>(
-        &'a mut self,
-        pass: &mut wgpu::RenderPass<'a>,
-    ) {
+    pub fn render<'a>(&'a mut self, pass: &mut wgpu::RenderPass<'a>) {
         for chunk in &self.chunks {
             pass.set_pipeline(&self.pipeline.pipeline);
             pass.set_bind_group(0, &self.bind_group.bind_group, &[]);

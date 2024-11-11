@@ -6,9 +6,10 @@ mod camera_utils;
 mod canvas;
 mod chunk;
 mod cube;
-mod egui_tools;
 mod demos;
+mod egui_tools;
 mod fs_utils;
+mod gizmo_example;
 mod gpu;
 mod gpu_utils;
 mod multimath;
@@ -16,24 +17,25 @@ mod paint_utils;
 mod pipelines;
 mod video;
 mod window;
-mod gizmo_example;
 
 use crate::camera::Camera;
 use crate::camera_controller::CameraController;
 use crate::camera_utils::process_camera_input;
 use crate::canvas::Canvas;
-use crate::egui_tools::EguiRenderer;
 use crate::demos::{ChunksDemo, VideoDemo};
+use crate::egui_tools::EguiRenderer;
 use crate::fs_utils::get_random_file_from_directory;
+use crate::gizmo_example::GizmoExample;
 use crate::gpu::{GPUCtx, GPUTexture, SView, ViewTarget};
-use crate::multimath::{Vec2, Vec3};
 use crate::video::{start, FrameData, PipelineEvent};
 use bytemuck::{Pod, Zeroable};
 use egui::load::SizedTexture;
 use egui::ImageSource;
 use egui_wgpu::wgpu::FilterMode;
 use egui_wgpu::{wgpu, ScreenDescriptor};
+use glam::*;
 use std::error::Error;
+use std::path::PathBuf;
 use std::time::Instant;
 use winit::{
     event::{ElementState, Event, WindowEvent},
@@ -41,7 +43,6 @@ use winit::{
     keyboard::{Key, NamedKey},
     window::CursorGrabMode,
 };
-use crate::gizmo_example::GizmoExample;
 
 #[repr(C)]
 #[derive(Pod, Copy, Clone, Zeroable)]
@@ -51,7 +52,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
 
     // Choose a video
-    let video_path = get_random_file_from_directory("/Volumes/dev/Shared/mp4").unwrap();
+    let video_path = get_random_file_from_directory("/Volumes/dev/Shared/mp4")
+        .or_else(|| Some(PathBuf::from("/Users/cold/Desktop/YP-1R-05x13.mp4")))
+        .unwrap();
     println!("Now playing: {:?}", video_path);
 
     // Start playing
@@ -65,7 +68,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let window_size = os_window.window.inner_size();
 
     // Create depth textures
-    let mut main_render_target_depth = ViewTarget::create(&ctx, window_size.width, window_size.height);
+    let mut main_render_target_depth =
+        ViewTarget::create(&ctx, window_size.width, window_size.height);
 
     // Create egui
     let mut egui_renderer = EguiRenderer::new(
@@ -77,7 +81,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     );
 
     // Init Examples
-    let mut chunks_demo = ChunksDemo::init(&os_window.surface_configuration, &ctx);
+    let mut chunks_demo = ChunksDemo::create(&os_window.surface_configuration, &ctx);
     let mut video_demo = VideoDemo::create(&ctx, &os_window.surface_configuration);
 
     // Init canvas
@@ -101,7 +105,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     );
 
     // Secondary view render attachments
-    let mut secondary_render_target_depth = ViewTarget::create(&ctx, window_size.width, window_size.height);
+    let mut secondary_render_target_depth =
+        ViewTarget::create(&ctx, window_size.width, window_size.height);
     let secondary_rt_gpu_texture = GPUTexture::create(
         &ctx,
         window_size.width,
@@ -120,8 +125,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Main camera
     let mut main_camera = Camera::new(
-        Vec3::from_components(-50.0, 0.0, 0.0),
-        Vec2::new(),
+        Vec3::new(-50.0, 0.0, 0.0),
+        Vec2::ZERO,
         window_size.width as f32,
         window_size.height as f32,
     );
@@ -130,8 +135,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Secondary camera
     let mut secondary_camera = Camera::new(
-        Vec3::from_components(-50.0, 0.0, 0.0),
-        Vec2::new(),
+        Vec3::new(-50.0, 0.0, 0.0),
+        Vec2::ZERO,
         window_size.width as f32,
         window_size.height as f32,
     );
@@ -174,7 +179,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                     WindowEvent::KeyboardInput { event, .. } => {
                         if let Key::Named(NamedKey::Escape) = event.logical_key {
                             if event.state.is_pressed() {
-                                os_window.window.set_cursor_grab(CursorGrabMode::None).unwrap();
+                                os_window
+                                    .window
+                                    .set_cursor_grab(CursorGrabMode::None)
+                                    .unwrap();
                                 os_window.window.set_cursor_visible(true);
                                 focused = false;
                             }
@@ -248,26 +256,30 @@ fn main() -> Result<(), Box<dyn Error>> {
                         // This will be used for both main render pass and egui render pass
                         let frame_view = &frame.texture.create_view(&Default::default());
 
-                        let mut render_pass = |camera: &Camera, color_view: &wgpu::TextureView, depth_view: &wgpu::TextureView| {
-                            let mut encoder =
-                                ctx.device.create_command_encoder(&Default::default());
-                            {
-                                let mut view = SView::new(color_view, depth_view);
-                                let mut pass = view.render_pass(&mut encoder);
-                                chunks_demo.setup_dynamic_camera(&ctx, &camera);
-                                video_demo.setup_dynamic_camera(&ctx, &camera);
-                                chunks_demo.render(&mut pass);
-                                video_demo.render(&mut pass);
-                            }
+                        let mut render_pass =
+                            |camera: &Camera,
+                             color_view: &wgpu::TextureView,
+                             depth_view: &wgpu::TextureView| {
+                                let mut encoder =
+                                    ctx.device.create_command_encoder(&Default::default());
+                                {
+                                    let mut view = SView::new(color_view, depth_view);
+                                    let mut pass = view.render_pass(&mut encoder);
+                                    chunks_demo.setup_dynamic_camera(&ctx, &camera);
+                                    video_demo.setup_dynamic_camera(&ctx, &camera);
+                                    chunks_demo.render(&mut pass);
+                                    video_demo.render(&mut pass);
+                                }
 
-                            ctx.queue.submit([encoder.finish()]);
-                        };
+                                ctx.queue.submit([encoder.finish()]);
+                            };
 
                         // Render main pass
                         {
                             let color_view = frame_view;
-                            let depth_view =
-                                &main_render_target_depth.depth_stencil.create_view(&Default::default());
+                            let depth_view = &main_render_target_depth
+                                .depth_stencil
+                                .create_view(&Default::default());
 
                             render_pass(&main_camera, color_view, depth_view);
                         }
@@ -298,9 +310,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                                     * scale_factor,
                             };
 
-                            egui::SidePanel::left("options_panel").show(egui_renderer.context(), |ui| {
-                                gizmo_example.draw_options(ui);
-                            });
+                            egui::SidePanel::left("options_panel").show(
+                                egui_renderer.context(),
+                                |ui| {
+                                    gizmo_example.draw_options(ui);
+                                },
+                            );
 
                             egui::Window::new("Canvas Example")
                                 .default_size([512.0, 512.0])
@@ -332,7 +347,11 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 .show(egui_renderer.context(), |ui| {
                                     ui.label(format!(
                                         "Main Camera {}",
-                                        if !use_secondary_camera { "(active)" } else { "" }
+                                        if !use_secondary_camera {
+                                            "(active)"
+                                        } else {
+                                            ""
+                                        }
                                     ));
                                     ui.label(format!("   X {}", main_camera.view.position.x));
                                     ui.label(format!("   Y {}", main_camera.view.position.y));
@@ -346,8 +365,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                                     ui.label(format!("   X {}", secondary_camera.view.position.x));
                                     ui.label(format!("   Y {}", secondary_camera.view.position.y));
                                     ui.label(format!("   Z {}", secondary_camera.view.position.z));
-                                    ui.label(format!("   Pitch {}", secondary_camera.view.yaw_pitch.x));
-                                    ui.label(format!("   Yaw {}", secondary_camera.view.yaw_pitch.y));
+                                    ui.label(format!(
+                                        "   Pitch {}",
+                                        secondary_camera.view.yaw_pitch.x
+                                    ));
+                                    ui.label(format!(
+                                        "   Yaw {}",
+                                        secondary_camera.view.yaw_pitch.y
+                                    ));
                                 });
 
                             egui::Window::new("Renderer Example")
@@ -356,7 +381,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 .show(egui_renderer.context(), |ui| {
                                     ui.image(ImageSource::Texture(SizedTexture::new(
                                         secondary_rt_texture_id,
-                                        [(window_size.width as f32) / 6.0, (window_size.height as f32) / 6.0],
+                                        [
+                                            (window_size.width as f32) / 6.0,
+                                            (window_size.height as f32) / 6.0,
+                                        ],
                                     )));
                                     gizmo_example.draw_gizmo(ui, &secondary_camera);
                                 });

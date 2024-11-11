@@ -1954,6 +1954,7 @@ dependencies = [
  "egui-winit",
  "env_logger",
  "ffmpeg-next",
+ "glam",
  "mp4",
  "noise",
  "pollster",

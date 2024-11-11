@@ -1,9 +1,9 @@
-use std::rc::Rc;
+use crate::window::OSWindow;
+use egui_wgpu::wgpu;
 use pollster::block_on;
+use std::rc::Rc;
 use winit::dpi::LogicalSize;
 use winit::event_loop::EventLoop;
-use egui_wgpu::wgpu;
-use crate::window::OSWindow;
 
 #[derive(Debug)]
 pub struct GPUCtx {
@@ -26,7 +26,7 @@ impl GPUCtx {
             compatible_surface: Some(&window.surface),
             force_fallback_adapter: false,
         }))
-            .unwrap();
+        .unwrap();
 
         let (device, queue) =
             block_on(adapter.request_device(&wgpu::DeviceDescriptor::default(), None)).unwrap();

@@ -1,7 +1,7 @@
 use crate::cube::generate_full_mesh;
-use crate::multimath::Vec4;
-use crate::pipelines::quad_mesh;
 use crate::gpu::GPUCtx;
+use crate::pipelines::quad_mesh;
+use glam::*;
 
 pub struct Chunk {
     pub vertex_format: quad_mesh::VertexFormat,
@@ -17,7 +17,7 @@ impl Chunk {
 
         let bind_group = quad_mesh::BindGroup1::create(
             ctx,
-            Vec4::from_components(x as f32 * 32.0, y as f32 * 32.0, z as f32 * 32.0, 0.0),
+            Vec4::new(x as f32 * 32.0, y as f32 * 32.0, z as f32 * 32.0, 0.0),
         );
 
         Chunk {

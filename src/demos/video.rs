@@ -1,10 +1,10 @@
-use bytemuck::NoUninit;
 use crate::camera::Camera;
 use crate::gpu::GPUCtx;
-use crate::multimath::Vec4;
 use crate::pipelines::video;
 use crate::video::Resolution;
+use bytemuck::NoUninit;
 use egui_wgpu::wgpu;
+use glam::*;
 
 pub struct VideoDemo {
     bind_group_0: video::BindGroup0,
@@ -24,22 +24,19 @@ fn generate_quad() -> video::ModelBundle {
 
     video::ModelBundle {
         vertex_data: vec![
-            video::Vertex::new([x, -h + y,  w + z],  [1, 1]),
-            video::Vertex::new([x,  h + y,  w + z],  [1, 0]),
-            video::Vertex::new([x,  h + y, -w + z],  [0, 0]),
-            video::Vertex::new([x, -h + y, -w + z],  [0, 1]),
+            video::Vertex::new([x, -h + y, w + z], [1, 1]),
+            video::Vertex::new([x, h + y, w + z], [1, 0]),
+            video::Vertex::new([x, h + y, -w + z], [0, 0]),
+            video::Vertex::new([x, -h + y, -w + z], [0, 1]),
         ],
         index_data: vec![0, 1, 2, 2, 3, 0],
     }
 }
 
 impl VideoDemo {
-    pub fn create(
-        ctx: &GPUCtx,
-        config: &wgpu::SurfaceConfiguration,
-    ) -> Self {
+    pub fn create(ctx: &GPUCtx, config: &wgpu::SurfaceConfiguration) -> Self {
         let bind_group_0 = video::BindGroup0::create(ctx, 512, 521);
-        let bind_group_1 = video::BindGroup1::create(ctx, Vec4::new());
+        let bind_group_1 = video::BindGroup1::create(ctx, Vec4::ZERO);
         let pipeline = video::Pipeline::create(ctx, config.format);
 
         let vertex_format = video::VertexFormat::create(ctx, &generate_quad());
@@ -54,13 +51,25 @@ impl VideoDemo {
         }
     }
 
-    pub fn update_texture<T: NoUninit>(&self, ctx: &GPUCtx, y_data: &[T],u_data: &[T],v_data: &[T]) {
-        self.bind_group_0.update_texture(ctx, y_data, u_data, v_data);
+    pub fn update_texture<T: NoUninit>(
+        &self,
+        ctx: &GPUCtx,
+        y_data: &[T],
+        u_data: &[T],
+        v_data: &[T],
+    ) {
+        self.bind_group_0
+            .update_texture(ctx, y_data, u_data, v_data);
     }
 
     pub(crate) fn check_resize(&mut self, ctx: &GPUCtx, resolution: Resolution) {
-        if (resolution.width != self.width as usize) || (resolution.height != self.height as usize) {
-            self.bind_group_0.resize_textures(ctx, resolution.width as u32, resolution.height as u32);
+        if (resolution.width != self.width as usize) || (resolution.height != self.height as usize)
+        {
+            self.bind_group_0.resize_textures(
+                ctx,
+                resolution.width as u32,
+                resolution.height as u32,
+            );
             self.width = resolution.width as u32;
             self.height = resolution.height as u32;
         }

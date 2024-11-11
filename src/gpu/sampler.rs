@@ -1,5 +1,5 @@
-use egui_wgpu::wgpu;
 use crate::gpu::GPUCtx;
+use egui_wgpu::wgpu;
 
 pub struct GPUSampler {
     sampler: wgpu::Sampler,
@@ -27,9 +27,7 @@ impl GPUSampler {
             ..Default::default()
         });
 
-        Self {
-            sampler
-        }
+        Self { sampler }
     }
 
     pub fn get_binding(&self, binding: u32) -> wgpu::BindGroupEntry {

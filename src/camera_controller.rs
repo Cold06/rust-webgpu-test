@@ -1,10 +1,10 @@
 use crate::camera::Camera;
-use crate::multimath::{Vec2, Vec3};
 use cgmath::num_traits::clamp;
 use std::f32::consts::FRAC_PI_2;
 use std::time::Duration;
 use winit::event::*;
 use winit::keyboard::{KeyCode, PhysicalKey};
+use glam::*;
 
 const SAFE_FRAC_PI_2: f32 = FRAC_PI_2 - 0.0001;
 
@@ -32,7 +32,7 @@ impl CameraController {
             amount_down: 0.0,
             speed,
             sensitivity,
-            yaw_pitch: Vec2 { x: 0.0, y: 0.0 },
+            yaw_pitch: Vec2::ZERO,
         }
     }
 
@@ -89,20 +89,17 @@ impl CameraController {
         let dt = dt.as_secs_f32();
 
         let (yaw_sin, yaw_cos) = camera.view.yaw_pitch.x.sin_cos();
-        let mut forward = Vec3::from_components(yaw_cos, 0.0, yaw_sin);
-        forward.normalize_mut();
-
-        let mut right = Vec3::from_components(-yaw_sin, 0.0, yaw_cos);
-        right.normalize_mut();
+        let mut forward = Vec3::new(yaw_cos, 0.0, yaw_sin).normalize();
+        let mut right = Vec3::new(-yaw_sin, 0.0, yaw_cos).normalize();
 
         let amount_forward = (self.amount_forward - self.amount_backward) * self.speed * dt;
         let amount_right = (self.amount_right - self.amount_left) * self.speed * dt;
 
-        forward.multiply_scalar(amount_forward);
-        right.multiply_scalar(amount_right);
+        forward *= amount_forward;
+        right *= amount_right;
 
-        camera.view.position.add_mut(&forward);
-        camera.view.position.add_mut(&right);
+        camera.view.position += forward;
+        camera.view.position += right;
 
         camera.view.position.y += (self.amount_up - self.amount_down) * self.speed * dt;
     }

@@ -1,5 +1,4 @@
-use noise::{Blend, Fbm, NoiseFn, Perlin, RidgedMulti, Seedable};
-use skia_safe::{Color, Color4f};
+use skia_safe::{Color};
 use crate::canvas::Canvas;
 
 fn map_range(value: f64) -> f64 {

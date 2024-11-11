@@ -1,4 +1,5 @@
-use crate::multimath::{to_rad, Mat4, Vec2, Vec3};
+use crate::multimath::{as_sphere_coord, to_rad};
+use glam::*;
 
 pub struct ProjectionMatrix {
     pub aspect: f32,
@@ -15,7 +16,7 @@ impl ProjectionMatrix {
             fov_y,
             z_near,
             z_far,
-            matrix: Mat4::new(),
+            matrix: Mat4::IDENTITY,
         }
     }
 
@@ -24,8 +25,7 @@ impl ProjectionMatrix {
     }
 
     pub fn compute(&mut self) {
-        self.matrix
-            .as_projection_matrix(self.z_near, self.z_far, self.fov_y, self.aspect, 1.0);
+        self.matrix = Mat4::perspective_rh(self.fov_y, self.aspect, self.z_near, self.z_far);
     }
 }
 
@@ -41,18 +41,19 @@ impl ViewMatrix {
         Self {
             position,
             yaw_pitch,
-            center: Vec3::new(),
-            matrix: Mat4::new(),
+            center: Vec3::ZERO,
+            matrix: Mat4::IDENTITY,
         }
     }
 
     fn compute(&mut self) {
-        self.center.as_sphere_coord(&self.yaw_pitch);
-        self.center.normalize_mut();
+        self.center = as_sphere_coord(self.yaw_pitch);
 
-        self.center.add_mut(&self.position);
+        self.center = self.center.normalize();
 
-        self.matrix.look_at(&self.position, &self.center, &WORLD_UP);
+        self.center += self.position;
+
+        self.matrix = Mat4::look_at_rh(self.position, self.center, Vec3::Y);
     }
 }
 
@@ -62,12 +63,6 @@ pub struct Camera {
     pub projection: ProjectionMatrix,
 }
 
-const WORLD_UP: Vec3 = Vec3 {
-    x: 0.0,
-    y: 1.0,
-    z: 0.0,
-};
-
 impl Camera {
     pub fn resize(&mut self, w: f32, h: f32) {
         self.projection.resize(w, h);
@@ -75,7 +70,7 @@ impl Camera {
 
     pub fn new(position: Vec3, yaw_pitch: Vec2, width: f32, height: f32) -> Self {
         let mut camera = Self {
-            matrix: Mat4::new(),
+            matrix: Mat4::IDENTITY,
             view: ViewMatrix::new(position, yaw_pitch),
             projection: ProjectionMatrix::new(width, height, to_rad(90.0), 0.1, 10000.0),
         };
@@ -88,7 +83,6 @@ impl Camera {
     pub fn compute(&mut self) {
         self.view.compute();
         self.projection.compute();
-        self.matrix
-            .multiply_from(&self.projection.matrix, &self.view.matrix);
+        self.matrix = self.projection.matrix * self.view.matrix;
     }
 }
