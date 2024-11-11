@@ -1,5 +1,8 @@
-use transform_gizmo_egui::{EnumSet, Gizmo, GizmoConfig, GizmoExt, GizmoMode, GizmoOrientation, GizmoResult};
+use crate::camera::Camera;
 use transform_gizmo_egui::math::{DMat4, DQuat, DVec3, Transform};
+use transform_gizmo_egui::{
+    EnumSet, Gizmo, GizmoConfig, GizmoExt, GizmoMode, GizmoOrientation, GizmoResult,
+};
 
 pub struct GizmoExample {
     gizmo: Gizmo,
@@ -22,18 +25,31 @@ impl GizmoExample {
         }
     }
 
-    pub fn draw_gizmo(&mut self, ui: &mut egui::Ui) {
+    pub fn draw_gizmo(&mut self, ui: &mut egui::Ui, camera: &Camera) {
         // The whole clipping area of the UI is used as viewport
         let viewport = ui.clip_rect();
 
-        let projection_matrix = DMat4::perspective_infinite_reverse_lh(
-            std::f64::consts::PI / 4.0,
-            (viewport.width() / viewport.height()).into(),
-            0.1,
+        let projection_matrix = DMat4::perspective_rh(
+            camera.projection.fov_y as f64,
+            camera.projection.aspect as f64,
+            camera.projection.z_near as f64,
+            camera.projection.z_far as f64,
         );
 
         // Fixed camera position
-        let view_matrix = DMat4::look_at_lh(DVec3::splat(5.0), DVec3::ZERO, DVec3::Y);
+        let view_matrix = DMat4::look_at_rh(
+            DVec3::new(
+                camera.view.position.x as f64,
+                camera.view.position.y as f64,
+                camera.view.position.z as f64,
+            ),
+            DVec3::new(
+                camera.view.center.x as f64,
+                camera.view.center.y as f64,
+                camera.view.center.z as f64,
+            ),
+            DVec3::Y,
+        );
 
         // Ctrl toggles snapping
         let snapping = ui.input(|input| input.modifiers.ctrl);

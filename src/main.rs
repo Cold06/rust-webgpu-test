@@ -358,7 +358,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                                         secondary_rt_texture_id,
                                         [(window_size.width as f32) / 6.0, (window_size.height as f32) / 6.0],
                                     )));
-                                    gizmo_example.draw_gizmo(ui);
+                                    gizmo_example.draw_gizmo(ui, &secondary_camera);
                                 });
 
                             egui::Window::new("Chunk Manager")
