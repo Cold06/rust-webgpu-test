@@ -17,6 +17,7 @@ mod paint_utils;
 mod pipelines;
 mod video;
 mod window;
+mod js;
 
 use crate::camera::Camera;
 use crate::camera_controller::CameraController;
@@ -43,13 +44,22 @@ use winit::{
     keyboard::{Key, NamedKey},
     window::CursorGrabMode,
 };
+use crate::js::VM;
 
 #[repr(C)]
 #[derive(Pod, Copy, Clone, Zeroable)]
 struct Filler0(u8, u8, u8, u8);
 
+fn print(s: String) {
+    println!("{s}");
+}
+
+
+
 fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
+
+    let vm = VM::new();
 
     // Choose a video
     let video_path = get_random_file_from_directory("/Volumes/dev/Shared/mp4")
@@ -150,6 +160,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut last_frame = Instant::now();
     let mut use_secondary_camera = false;
     let mut gizmo_example = GizmoExample::new();
+
+    let mut language = String::from("js");
+    let mut code = String::from("const print = str => console.log(str);");
 
     event_loop.run(|event, window_target| {
         window_target.set_control_flow(ControlFlow::Poll);
@@ -415,6 +428,72 @@ fn main() -> Result<(), Box<dyn Error>> {
                                     }
                                 });
 
+                            egui::Window::new("Code Editor")
+                                .resizable(true)
+                                .hscroll(true)
+                                .vscroll(true)
+                                .default_height(500.0)
+                                .show(egui_renderer.context(), |ui| {
+                                    if cfg!(feature = "syntect") {
+                                        ui.horizontal(|ui| {
+                                            ui.label("Language:");
+                                            ui.text_edit_singleline(&mut language);
+                                        });
+                                        ui.horizontal_wrapped(|ui| {
+                                            ui.spacing_mut().item_spacing.x = 0.0;
+                                            ui.label("Syntax highlighting powered by ");
+                                            ui.hyperlink_to("syntect", "https://github.com/trishume/syntect");
+                                            ui.label(".");
+                                        });
+                                    } else {
+                                        ui.horizontal_wrapped(|ui| {
+                                            ui.spacing_mut().item_spacing.x = 0.0;
+                                            ui.label("Compile the demo with the ");
+                                            ui.code("syntax_highlighting");
+                                            ui.label(" feature to enable more accurate syntax highlighting using ");
+                                            ui.hyperlink_to("syntect", "https://github.com/trishume/syntect");
+                                            ui.label(".");
+                                        });
+                                    }
+
+                                    let mut theme =
+                                        egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx(), ui.style());
+                                    ui.collapsing("Theme", |ui| {
+                                        ui.group(|ui| {
+                                            theme.ui(ui);
+                                            theme.clone().store_in_memory(ui.ctx());
+                                        });
+                                    });
+
+                                    let mut layouter = |ui: &egui::Ui, string: &str, wrap_width: f32| {
+                                        let mut layout_job = egui_extras::syntax_highlighting::highlight(
+                                            ui.ctx(),
+                                            ui.style(),
+                                            &theme,
+                                            string,
+                                            &mut language,
+                                        );
+                                        layout_job.wrap.max_width = wrap_width;
+                                        ui.fonts(|f| f.layout_job(layout_job))
+                                    };
+
+                                    egui::ScrollArea::vertical().show(ui, |ui| {
+                                        ui.add(
+                                            egui::TextEdit::multiline(&mut code)
+                                                .font(egui::TextStyle::Monospace) // for cursor height
+                                                .code_editor()
+                                                .desired_rows(10)
+                                                .lock_focus(true)
+                                                .desired_width(f32::INFINITY)
+                                                .layouter(&mut layouter),
+                                        );
+                                    });
+
+                                    if ui.button("Eval").clicked() {
+                                        vm.eval(&code);
+                                    }
+                                });
+
                             egui_renderer.end_frame_and_draw(
                                 &ctx.device,
                                 &ctx.queue,
@@ -423,6 +502,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 &frame_view,
                                 screen_descriptor,
                             );
+
+
 
                             ctx.queue.submit(Some(encoder.finish()));
                         }
