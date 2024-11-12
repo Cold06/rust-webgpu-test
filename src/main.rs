@@ -125,7 +125,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Main camera
     let mut main_camera = Camera::new(
-        Vec3::new(-50.0, 0.0, 0.0),
+        Vec3::new(-137.0, 0.0, 0.0),
         Vec2::ZERO,
         window_size.width as f32,
         window_size.height as f32,
@@ -325,6 +325,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 .hscroll(true)
                                 .vscroll(true)
                                 .show(egui_renderer.context(), |ui| {
+                                    ui.label(format!("Size {}", ui.available_size()));
+
                                     ui.image(ImageSource::Texture(SizedTexture::new(
                                         canvas_texture_id,
                                         canvas_size,
