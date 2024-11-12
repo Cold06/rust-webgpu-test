@@ -322,6 +322,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                             egui::Window::new("Canvas Example")
                                 .default_size([512.0, 512.0])
                                 .resizable(true)
+                                .hscroll(true)
+                                .vscroll(true)
                                 .show(egui_renderer.context(), |ui| {
                                     ui.image(ImageSource::Texture(SizedTexture::new(
                                         canvas_texture_id,
@@ -346,6 +348,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                             egui::Window::new("Camera")
                                 .default_size([170.0, 260.0])
                                 .resizable(true)
+                                .hscroll(true)
+                                .vscroll(true)
                                 .show(egui_renderer.context(), |ui| {
                                     ui.label(format!(
                                         "Main Camera {}",
@@ -380,6 +384,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                             egui::Window::new("Renderer Example")
                                 .default_size([512.0, 512.0])
                                 .resizable(true)
+                                .hscroll(true)
+                                .vscroll(true)
                                 .show(egui_renderer.context(), |ui| {
                                     ui.image(ImageSource::Texture(SizedTexture::new(
                                         secondary_rt_texture_id,
@@ -399,6 +405,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                             egui::Window::new("Chunk Manager")
                                 .default_size([170.0, 260.0])
                                 .resizable(true)
+                                .hscroll(true)
+                                .vscroll(true)
                                 .show(egui_renderer.context(), |ui| {
                                     if ui.button("Spawn Chunk").clicked() {
                                         chunks_demo.spawn_chunk(&ctx);
