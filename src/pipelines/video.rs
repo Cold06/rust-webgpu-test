@@ -324,7 +324,7 @@ impl Pipeline {
                     compilation_options: Default::default(),
                 }),
                 primitive: wgpu::PrimitiveState {
-                    cull_mode: Some(wgpu::Face::Back),
+                    cull_mode: None,
                     topology: wgpu::PrimitiveTopology::TriangleList,
                     ..Default::default()
                 },

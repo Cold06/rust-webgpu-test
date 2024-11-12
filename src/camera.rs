@@ -72,7 +72,7 @@ impl Camera {
         let mut camera = Self {
             matrix: Mat4::IDENTITY,
             view: ViewMatrix::new(position, yaw_pitch),
-            projection: ProjectionMatrix::new(width, height, to_rad(90.0), 0.1, 10000.0),
+            projection: ProjectionMatrix::new(width, height, std::f32::consts::PI / 4.0 , 0.1, 10000.0),
         };
 
         camera.compute();

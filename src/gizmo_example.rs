@@ -1,9 +1,11 @@
+use crate::camera::Camera;
+use crate::multimath::dmat4_from_mat4;
 use egui::{Pos2, Rect};
 use glam::{Mat4, Quat, Vec3};
-use crate::camera::Camera;
 use transform_gizmo_egui::math::{DQuat, DVec3, Transform};
-use transform_gizmo_egui::{mint, EnumSet, Gizmo, GizmoConfig, GizmoExt, GizmoMode, GizmoOrientation, GizmoResult};
-use crate::multimath::dmat4_from_mat4;
+use transform_gizmo_egui::{
+    mint, EnumSet, Gizmo, GizmoConfig, GizmoExt, GizmoMode, GizmoOrientation, GizmoResult,
+};
 
 pub struct GizmoExample {
     gizmo: Gizmo,
@@ -30,7 +32,6 @@ impl GizmoExample {
 
     pub fn draw_gizmo(&mut self, ui: &mut egui::Ui, camera: &Camera, w: f32, h: f32) {
         // The whole clipping area of the UI is used as viewport
-
 
         // Ctrl toggles snapping
         let snapping = ui.input(|input| input.modifiers.ctrl);
@@ -64,14 +65,22 @@ impl GizmoExample {
             }
 
             self.transform = Mat4::from_scale_rotation_translation(
-                Vec3::new(self.scale.x as f32, self.scale.y as f32, self.scale.z as f32),
+                Vec3::new(
+                    self.scale.x as f32,
+                    self.scale.y as f32,
+                    self.scale.z as f32,
+                ),
                 Quat::from_xyzw(
                     transform.rotation.v.x as f32,
                     transform.rotation.v.y as f32,
                     transform.rotation.v.z as f32,
                     transform.rotation.s as f32,
                 ),
-                Vec3::new(self.translation.x as f32, self.translation.y as f32, self.translation.z as f32),
+                Vec3::new(
+                    self.translation.x as f32,
+                    self.translation.y as f32,
+                    self.translation.z as f32,
+                ),
             );
 
             self.scale = transform.scale.into();
