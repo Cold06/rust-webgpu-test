@@ -1,3 +1,4 @@
+use egui::{Pos2, Rect};
 use crate::camera::Camera;
 use transform_gizmo_egui::math::{DQuat, DVec3, Transform};
 use transform_gizmo_egui::{mint, EnumSet, Gizmo, GizmoConfig, GizmoExt, GizmoMode, GizmoOrientation, GizmoResult};
@@ -24,9 +25,9 @@ impl GizmoExample {
         }
     }
 
-    pub fn draw_gizmo(&mut self, ui: &mut egui::Ui, camera: &Camera) {
+    pub fn draw_gizmo(&mut self, ui: &mut egui::Ui, camera: &Camera, w: f32, h: f32) {
         // The whole clipping area of the UI is used as viewport
-        let viewport = ui.clip_rect();
+
 
         // Ctrl toggles snapping
         let snapping = ui.input(|input| input.modifiers.ctrl);
@@ -37,10 +38,12 @@ impl GizmoExample {
         let p32 = camera.projection.matrix;
         let mut p64: mint::RowMatrix4<f64> = dmat4_from_mat4(p32).into();
 
+        let min = ui.clip_rect().min;
+
         self.gizmo.update_config(GizmoConfig {
             view_matrix: v64,
             projection_matrix: p64,
-            viewport,
+            viewport: Rect::from_two_pos(ui.clip_rect().min, Pos2::new(min.x + w, min.y + h)),
             modes: self.gizmo_modes,
             orientation: self.gizmo_orientation,
             snapping,

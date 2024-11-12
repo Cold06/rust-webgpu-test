@@ -386,7 +386,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                                             (window_size.height as f32) / 6.0,
                                         ],
                                     )));
-                                    gizmo_example.draw_gizmo(ui, &secondary_camera);
+                                    gizmo_example.draw_gizmo(ui, &secondary_camera, (window_size.width as f32) / 6.0,
+                                                             (window_size.height as f32) / 6.0);
                                 });
 
                             egui::Window::new("Chunk Manager")
