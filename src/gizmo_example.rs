@@ -1,4 +1,5 @@
 use egui::{Pos2, Rect};
+use glam::{Mat4, Quat, Vec3};
 use crate::camera::Camera;
 use transform_gizmo_egui::math::{DQuat, DVec3, Transform};
 use transform_gizmo_egui::{mint, EnumSet, Gizmo, GizmoConfig, GizmoExt, GizmoMode, GizmoOrientation, GizmoResult};
@@ -11,11 +12,13 @@ pub struct GizmoExample {
     scale: DVec3,
     rotation: DQuat,
     translation: DVec3,
+    pub transform: Mat4,
 }
 
 impl GizmoExample {
     pub fn new() -> Self {
         Self {
+            transform: Mat4::IDENTITY,
             gizmo: Gizmo::default(),
             gizmo_modes: GizmoMode::all(),
             gizmo_orientation: GizmoOrientation::Local,
@@ -59,6 +62,17 @@ impl GizmoExample {
             {
                 *transform = *new_transform;
             }
+
+            self.transform = Mat4::from_scale_rotation_translation(
+                Vec3::new(self.scale.x as f32, self.scale.y as f32, self.scale.z as f32),
+                Quat::from_xyzw(
+                    transform.rotation.v.x as f32,
+                    transform.rotation.v.y as f32,
+                    transform.rotation.v.z as f32,
+                    transform.rotation.s as f32,
+                ),
+                Vec3::new(self.translation.x as f32, self.translation.y as f32, self.translation.z as f32),
+            );
 
             self.scale = transform.scale.into();
             self.rotation = transform.rotation.into();

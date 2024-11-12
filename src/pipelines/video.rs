@@ -239,6 +239,7 @@ impl BindGroup0 {
 
 pub struct BindGroup1 {
     pub bind_group: wgpu::BindGroup,
+    buffer: wgpu::Buffer,
 }
 
 impl BindGroup1 {
@@ -250,7 +251,7 @@ impl BindGroup1 {
             ty: wgpu::BindingType::Buffer {
                 ty: wgpu::BufferBindingType::Uniform,
                 has_dynamic_offset: false,
-                min_binding_size: wgpu::BufferSize::new(16),
+                min_binding_size: wgpu::BufferSize::new(64),
             },
             count: None,
         }],
@@ -260,12 +261,16 @@ impl BindGroup1 {
         ctx.device.create_bind_group_layout(&Self::LAYOUT)
     }
 
-    pub fn create(ctx: &GPUCtx, position: Vec4) -> Self {
+    pub fn update_transform(&self, ctx: &GPUCtx, transform: Mat4) {
+        ctx.queue.write_buffer(&self.buffer, 0, Mat4Bytes(transform).as_bytes());
+    }
+
+    pub fn create(ctx: &GPUCtx, transform: Mat4) -> Self {
         let position_buffer = ctx
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: None,
-                contents: Vec4Bytes(position).as_bytes(),
+                contents: Mat4Bytes(transform).as_bytes(),
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             });
 
@@ -278,7 +283,7 @@ impl BindGroup1 {
             }],
         });
 
-        Self { bind_group }
+        Self { bind_group, buffer: position_buffer }
     }
 }
 

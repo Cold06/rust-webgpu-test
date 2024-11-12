@@ -34,9 +34,14 @@ fn generate_quad() -> video::ModelBundle {
 }
 
 impl VideoDemo {
+
+    pub(crate) fn update_location(&self, ctx: &GPUCtx, mat: Mat4) {
+        self.bind_group_1.update_transform(ctx, mat);
+    }
+
     pub fn create(ctx: &GPUCtx, config: &wgpu::SurfaceConfiguration) -> Self {
         let bind_group_0 = video::BindGroup0::create(ctx, 512, 521);
-        let bind_group_1 = video::BindGroup1::create(ctx, Vec4::ZERO);
+        let bind_group_1 = video::BindGroup1::create(ctx, Mat4::IDENTITY);
         let pipeline = video::Pipeline::create(ctx, config.format);
 
         let vertex_format = video::VertexFormat::create(ctx, &generate_quad());

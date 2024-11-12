@@ -3,7 +3,7 @@ struct Vertex {
     @location(1) tex_coord: vec2<f32>,
 }
 struct PerInstance {
-    position: vec4<f32>,
+    transform: mat4x4<f32>,
 };
 
 struct Locals {
@@ -33,7 +33,7 @@ var<uniform> perInstance: PerInstance;
 fn vs_main(vertex: Vertex) -> VertexOutput {
     var out: VertexOutput;
     out.tex_coord = vertex.tex_coord;
-    out.position = locals.transform * vec4<f32>(vertex.position.xyz + perInstance.position.xyz, 1.0);
+    out.position = locals.transform * perInstance.transform * vec4<f32>(vertex.position.xyz, 1.0);
     return out;
 }
 

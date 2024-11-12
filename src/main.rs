@@ -221,6 +221,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                         secondary_camera_controller.update_camera(&mut secondary_camera, delta);
                         secondary_camera.compute();
 
+                        video_demo.update_location(&ctx, gizmo_example.transform);
+
                         // Get Surface Texture
                         let frame = match os_window.surface.get_current_texture() {
                             Ok(frame) => frame,
@@ -386,8 +388,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                                             (window_size.height as f32) / 6.0,
                                         ],
                                     )));
-                                    gizmo_example.draw_gizmo(ui, &secondary_camera, (window_size.width as f32) / 6.0,
-                                                             (window_size.height as f32) / 6.0);
+                                    gizmo_example.draw_gizmo(
+                                        ui,
+                                        &secondary_camera,
+                                        (window_size.width as f32) / 6.0,
+                                        (window_size.height as f32) / 6.0,
+                                    );
                                 });
 
                             egui::Window::new("Chunk Manager")
