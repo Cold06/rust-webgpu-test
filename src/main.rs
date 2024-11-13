@@ -12,12 +12,12 @@ mod fs_utils;
 mod gizmo_example;
 mod gpu;
 mod gpu_utils;
+mod js;
 mod multimath;
 mod paint_utils;
 mod pipelines;
 mod video;
 mod window;
-mod js;
 
 use crate::camera::Camera;
 use crate::camera_controller::CameraController;
@@ -28,7 +28,8 @@ use crate::egui_tools::EguiRenderer;
 use crate::fs_utils::get_random_file_from_directory;
 use crate::gizmo_example::GizmoExample;
 use crate::gpu::{GPUCtx, GPUTexture, SView, ViewTarget};
-use crate::video::{start, FrameData, PipelineEvent};
+use crate::js::VM;
+use crate::video::{start, FrameData, MP4Command, PipelineEvent};
 use bytemuck::{Pod, Zeroable};
 use egui::load::SizedTexture;
 use egui::ImageSource;
@@ -37,14 +38,13 @@ use egui_wgpu::{wgpu, ScreenDescriptor};
 use glam::*;
 use std::error::Error;
 use std::path::PathBuf;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use winit::{
     event::{ElementState, Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     keyboard::{Key, NamedKey},
     window::CursorGrabMode,
 };
-use crate::js::VM;
 
 #[repr(C)]
 #[derive(Pod, Copy, Clone, Zeroable)]
@@ -53,8 +53,6 @@ struct Filler0(u8, u8, u8, u8);
 fn print(s: String) {
     println!("{s}");
 }
-
-
 
 fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
@@ -68,7 +66,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("Now playing: {:?}", video_path);
 
     // Start playing
-    let (video_thread, video_receiver) = start(video_path);
+    let (video_thread, video_receiver, command_sender) = start(video_path);
 
     // Create the event loop
     let event_loop = EventLoop::new()?;
@@ -427,6 +425,32 @@ fn main() -> Result<(), Box<dyn Error>> {
                                         chunks_demo.spawn_chunk(&ctx);
                                     }
                                 });
+
+                            egui::Window::new("Video")
+                                .resizable(true)
+                                .hscroll(true)
+                                .vscroll(true)
+                                .show(egui_renderer.context(), |ui| {
+                                    if ui.button("Pause").clicked() {
+                                        command_sender.try_send(MP4Command::Pause);
+                                    }
+                                    if ui.button("Play").clicked() {
+                                        command_sender.try_send(MP4Command::Play);
+                                    }
+                                    if ui.button("Stop").clicked() {
+                                        command_sender.try_send(MP4Command::Stop);
+                                    }
+                                    if ui.button("SkipForward").clicked() {
+                                        command_sender.try_send(MP4Command::SkipForward);
+                                    }
+                                    if ui.button("SkipBackward").clicked() {
+                                        command_sender.try_send(MP4Command::SkipBackward);
+                                    }
+                                    if ui.button("Seek(Duration)").clicked() {
+                                        command_sender.try_send(MP4Command::Seek(Duration::from_millis(0)));
+                                    }
+                                });
+
 
                             egui::Window::new("Code Editor")
                                 .resizable(true)

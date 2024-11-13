@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use bytes::{Buf, Bytes, BytesMut};
-use crossbeam_channel::{bounded, Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender};
 use ffmpeg_next::codec::{Context, Id};
 use ffmpeg_next::format::Pixel;
 use ffmpeg_next::frame::Video;
@@ -184,27 +184,45 @@ fn run_reader_thread<Reader: Read + Seek, DecoderOptions>(
     _fragment_receiver: Option<Receiver<PipelineEvent<Bytes>>>,
     track_info: TrackInfo<DecoderOptions, impl FnMut(mp4::Mp4Sample) -> Bytes>,
     should_loop: bool,
+    command_receiver: Receiver<MP4Command>,
 ) {
-    // Grab our registered sample unpacker
     let mut sample_unpacker = track_info.sample_unpacker;
 
-    // State variable to keep track of current loop
     let mut loop_offset = Duration::ZERO;
 
     loop {
         let mut last_end_pts = Duration::ZERO;
 
-        // track_info.sample_count is gotten from the Mp4 metadata
         for i in 1..track_info.sample_count {
+            match command_receiver.try_recv() {
+                Ok(command) => {
+                    match command {
+                        MP4Command::SkipBackward => {
+                            println!("Skip backward");
+                        }
+                        MP4Command::SkipForward => {
+                            println!("Skip forward");
+                        }
+                        MP4Command::Pause => {
+                            println!("Pause");
+                        }
+                        MP4Command::Play => {
+                            println!("Play");
+                        }
+                        MP4Command::Stop => {
+                            println!("Stop");
+                        }
+                        MP4Command::Seek(duration) => {
+                            println!("Seek to {:?}", duration);
+                        }
+                    }
+                }
+                _ => {}
+            }
 
-            // Control variable to be able to force a stop
             if stop_thread.load(std::sync::atomic::Ordering::Relaxed) {
                 return;
             }
-
-            // You can probably read many samples here
-            // But here we just read one track per sample_count
-            // QUESTION: how to seek the file
 
             match reader.read_sample(track_info.track_id, i) {
                 Ok(Some(sample)) => {
@@ -258,6 +276,21 @@ fn run_reader_thread<Reader: Read + Seek, DecoderOptions>(
     }
 }
 
+pub enum MP4Command {
+    // Pause (if possible)
+    Pause,
+    // Play (if possible)
+    Play,
+    // Pause + Go to star
+    Stop,
+    // Go +10 seconds
+    SkipForward,
+    // Go -10 seconds
+    SkipBackward,
+    // Go to a specific time (convert duration to sample_id)
+    Seek(Duration),
+}
+
 
 impl<DecoderOptions: Clone + Send + 'static> Mp4FileReader<DecoderOptions> {
     fn new<
@@ -272,8 +305,9 @@ impl<DecoderOptions: Clone + Send + 'static> Mp4FileReader<DecoderOptions> {
         fragment_receiver: Option<Receiver<PipelineEvent<Bytes>>>,
         stop_thread: Arc<AtomicBool>,
         should_loop: bool,
+        command_receiver: Receiver<MP4Command>,
     ) -> Result<Option<(Self, ChunkReceiver)>, Mp4Error> {
-        let reader = mp4::Mp4Reader::read_header(reader, size)?;
+            let reader = Mp4Reader::read_header(reader, size)?;
 
         let Some(track_info) = track_info_reader(&reader) else {
             return Ok(None);
@@ -295,6 +329,7 @@ impl<DecoderOptions: Clone + Send + 'static> Mp4FileReader<DecoderOptions> {
                     fragment_receiver,
                     track_info,
                     should_loop,
+                    command_receiver,
                 );
             })
             .unwrap();
@@ -313,7 +348,7 @@ impl<DecoderOptions: Clone + Send + 'static> Mp4FileReader<DecoderOptions> {
 impl Mp4FileReader<VideoDecoderOptions> {
 
 
-    fn new_video(options: Mp4ReaderOptions) -> Result<Option<(Mp4FileReader<VideoDecoderOptions>, ChunkReceiver)>, Mp4Error> {
+    fn new_video(options: Mp4ReaderOptions, command_receiver: Receiver<MP4Command>) -> Result<Option<(Mp4FileReader<VideoDecoderOptions>, ChunkReceiver)>, Mp4Error> {
         let stop_thread = Arc::new(AtomicBool::new(false));
 
         match options {
@@ -321,7 +356,7 @@ impl Mp4FileReader<VideoDecoderOptions> {
                 let input_file = std::fs::File::open(file)?;
                 let size = input_file.metadata()?.size();
 
-                Self::new(input_file, size, find_h264_info, None, stop_thread, should_loop)
+                Self::new(input_file, size, find_h264_info, None, stop_thread, should_loop, command_receiver)
             }
         }
     }
@@ -335,11 +370,11 @@ enum VideoInputReceiver {
 }
 
 
-fn middle(file: PathBuf) -> (Mp4FileReader<VideoDecoderOptions>, VideoInputReceiver) {
+fn create_mp4_reader_thread(file: PathBuf, command_receiver: Receiver<MP4Command>) -> (Mp4FileReader<VideoDecoderOptions>, VideoInputReceiver) {
     let video = Mp4FileReader::new_video(Mp4ReaderOptions::NonFragmented {
         file,
         should_loop: false,
-    }).unwrap();
+    }, command_receiver).unwrap();
 
     let (video_reader, video_receiver) = match video {
         Some((reader, receiver)) => {
@@ -358,7 +393,7 @@ fn middle(file: PathBuf) -> (Mp4FileReader<VideoDecoderOptions>, VideoInputRecei
 pub fn start_video_decoder_thread(
     options: VideoDecoderOptions,
     chunks_receiver: Receiver<PipelineEvent<EncodedChunk>>,
-    frame_sender: Sender<PipelineEvent<Frame>>,
+    frame_sender: Sender<PipelineEvent<Frame>>
 ) {
     match options.decoder {
         VideoDecoder::FFmpegH264 => start_ffmpeg_decoder_thread(
@@ -399,15 +434,17 @@ pub struct Frame {
 }
 
 
-pub fn start(file: PathBuf) -> (Mp4FileReader<VideoDecoderOptions>, Receiver<PipelineEvent<Frame>>)  {
-    let (file_reader, video_receiver) = middle(file);
+pub fn start(file: PathBuf) -> (Mp4FileReader<VideoDecoderOptions>, Receiver<PipelineEvent<Frame>>, Sender<MP4Command>)  {
+    let (command_sender, command_receiver) = crossbeam_channel::bounded::<MP4Command>(1);
+
+    let (file_reader, video_receiver) = create_mp4_reader_thread(file, command_receiver);
 
     let yuv_frame_receiver = match video_receiver {
         VideoInputReceiver::Encoded {
             decoder_options,
             chunk_receiver,
         } => {
-            let (sender, receiver) = bounded(10);
+            let (sender, receiver) = crossbeam_channel::bounded(10);
             start_video_decoder_thread(
                 decoder_options,
                 chunk_receiver,
@@ -417,7 +454,7 @@ pub fn start(file: PathBuf) -> (Mp4FileReader<VideoDecoderOptions>, Receiver<Pip
         }
     };
 
-    (file_reader, yuv_frame_receiver)
+    (file_reader, yuv_frame_receiver, command_sender)
 }
 
 #[derive(Debug, thiserror::Error)]
