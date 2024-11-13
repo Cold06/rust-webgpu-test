@@ -1,9 +1,3 @@
-use std::io::{Read, Seek, SeekFrom};
-use std::os::unix::fs::MetadataExt;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
-use std::time::Duration;
 use bytes::{Buf, Bytes, BytesMut};
 use crossbeam_channel::{Receiver, Sender};
 use ffmpeg_next::codec::{Context, Id};
@@ -12,6 +6,12 @@ use ffmpeg_next::frame::Video;
 use ffmpeg_next::media::Type;
 use ffmpeg_next::Rational;
 use mp4::Mp4Reader;
+use std::io::{Read, Seek, SeekFrom};
+use std::os::unix::fs::MetadataExt;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
+use std::time::Duration;
 use tracing::{debug, error, span, trace, warn};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,7 +34,6 @@ pub enum EncodedChunkKind {
     Video(VideoCodec),
 }
 
-
 struct TrackInfo<DecoderOptions, SampleUnpacker: FnMut(mp4::Mp4Sample) -> Bytes> {
     sample_count: u32,
     timescale: u32,
@@ -42,6 +41,12 @@ struct TrackInfo<DecoderOptions, SampleUnpacker: FnMut(mp4::Mp4Sample) -> Bytes>
     decoder_options: DecoderOptions,
     sample_unpacker: SampleUnpacker,
     chunk_kind: EncodedChunkKind,
+    frame_rate: f64,
+    bitrate: u32,
+    height: u16,
+    width: u16,
+    default_sample_duration: u32,
+    duration: Duration,
 }
 
 fn find_h264_info<Reader: Read + Seek + Send + 'static>(
@@ -119,6 +124,12 @@ fn find_h264_info<Reader: Read + Seek + Send + 'static>(
     };
 
     Some(TrackInfo {
+        duration: track.duration(),
+        default_sample_duration: track.default_sample_duration,
+        width: track.width(),
+        height: track.height(),
+        bitrate: track.bitrate(),
+        frame_rate: track.frame_rate(),
         sample_count: track.sample_count(),
         timescale: track.timescale(),
         decoder_options,
@@ -168,14 +179,8 @@ pub struct EncodedChunk {
 type ChunkReceiver = Receiver<PipelineEvent<EncodedChunk>>;
 
 enum Mp4ReaderOptions {
-    NonFragmented {
-        file: PathBuf,
-        should_loop: bool,
-    },
+    NonFragmented { file: PathBuf, should_loop: bool },
 }
-
-
-
 
 fn run_reader_thread<Reader: Read + Seek, DecoderOptions>(
     mut reader: Mp4Reader<Reader>,
@@ -195,28 +200,26 @@ fn run_reader_thread<Reader: Read + Seek, DecoderOptions>(
 
         for i in 1..track_info.sample_count {
             match command_receiver.try_recv() {
-                Ok(command) => {
-                    match command {
-                        MP4Command::SkipBackward => {
-                            println!("Skip backward");
-                        }
-                        MP4Command::SkipForward => {
-                            println!("Skip forward");
-                        }
-                        MP4Command::Pause => {
-                            println!("Pause");
-                        }
-                        MP4Command::Play => {
-                            println!("Play");
-                        }
-                        MP4Command::Stop => {
-                            println!("Stop");
-                        }
-                        MP4Command::Seek(duration) => {
-                            println!("Seek to {:?}", duration);
-                        }
+                Ok(command) => match command {
+                    MP4Command::SkipBackward => {
+                        println!("Skip backward");
                     }
-                }
+                    MP4Command::SkipForward => {
+                        println!("Skip forward");
+                    }
+                    MP4Command::Pause => {
+                        println!("Pause");
+                    }
+                    MP4Command::Play => {
+                        println!("Play");
+                    }
+                    MP4Command::Stop => {
+                        println!("Stop");
+                    }
+                    MP4Command::Seek(duration) => {
+                        println!("Seek to {:?}", duration);
+                    }
+                },
                 _ => {}
             }
 
@@ -291,7 +294,6 @@ pub enum MP4Command {
     Seek(Duration),
 }
 
-
 impl<DecoderOptions: Clone + Send + 'static> Mp4FileReader<DecoderOptions> {
     fn new<
         TReader: Read + Seek + Send + 'static,
@@ -307,7 +309,7 @@ impl<DecoderOptions: Clone + Send + 'static> Mp4FileReader<DecoderOptions> {
         should_loop: bool,
         command_receiver: Receiver<MP4Command>,
     ) -> Result<Option<(Self, ChunkReceiver)>, Mp4Error> {
-            let reader = Mp4Reader::read_header(reader, size)?;
+        let reader = Mp4Reader::read_header(reader, size)?;
 
         let Some(track_info) = track_info_reader(&reader) else {
             return Ok(None);
@@ -346,9 +348,10 @@ impl<DecoderOptions: Clone + Send + 'static> Mp4FileReader<DecoderOptions> {
 }
 
 impl Mp4FileReader<VideoDecoderOptions> {
-
-
-    fn new_video(options: Mp4ReaderOptions, command_receiver: Receiver<MP4Command>) -> Result<Option<(Mp4FileReader<VideoDecoderOptions>, ChunkReceiver)>, Mp4Error> {
+    fn new_video(
+        options: Mp4ReaderOptions,
+        command_receiver: Receiver<MP4Command>,
+    ) -> Result<Option<(Mp4FileReader<VideoDecoderOptions>, ChunkReceiver)>, Mp4Error> {
         let stop_thread = Arc::new(AtomicBool::new(false));
 
         match options {
@@ -356,7 +359,15 @@ impl Mp4FileReader<VideoDecoderOptions> {
                 let input_file = std::fs::File::open(file)?;
                 let size = input_file.metadata()?.size();
 
-                Self::new(input_file, size, find_h264_info, None, stop_thread, should_loop, command_receiver)
+                Self::new(
+                    input_file,
+                    size,
+                    find_h264_info,
+                    None,
+                    stop_thread,
+                    should_loop,
+                    command_receiver,
+                )
             }
         }
     }
@@ -369,12 +380,18 @@ enum VideoInputReceiver {
     },
 }
 
-
-fn create_mp4_reader_thread(file: PathBuf, command_receiver: Receiver<MP4Command>) -> (Mp4FileReader<VideoDecoderOptions>, VideoInputReceiver) {
-    let video = Mp4FileReader::new_video(Mp4ReaderOptions::NonFragmented {
-        file,
-        should_loop: false,
-    }, command_receiver).unwrap();
+fn create_mp4_reader_thread(
+    file: PathBuf,
+    command_receiver: Receiver<MP4Command>,
+) -> (Mp4FileReader<VideoDecoderOptions>, VideoInputReceiver) {
+    let video = Mp4FileReader::new_video(
+        Mp4ReaderOptions::NonFragmented {
+            file,
+            should_loop: false,
+        },
+        command_receiver,
+    )
+    .unwrap();
 
     let (video_reader, video_receiver) = match video {
         Some((reader, receiver)) => {
@@ -393,13 +410,12 @@ fn create_mp4_reader_thread(file: PathBuf, command_receiver: Receiver<MP4Command
 pub fn start_video_decoder_thread(
     options: VideoDecoderOptions,
     chunks_receiver: Receiver<PipelineEvent<EncodedChunk>>,
-    frame_sender: Sender<PipelineEvent<Frame>>
+    frame_sender: Sender<PipelineEvent<Frame>>,
 ) {
     match options.decoder {
-        VideoDecoder::FFmpegH264 => start_ffmpeg_decoder_thread(
-            chunks_receiver,
-            frame_sender,
-        ).unwrap(),
+        VideoDecoder::FFmpegH264 => {
+            start_ffmpeg_decoder_thread(chunks_receiver, frame_sender).unwrap()
+        }
     };
 }
 
@@ -433,8 +449,13 @@ pub struct Frame {
     pub pts: Duration,
 }
 
-
-pub fn start(file: PathBuf) -> (Mp4FileReader<VideoDecoderOptions>, Receiver<PipelineEvent<Frame>>, Sender<MP4Command>)  {
+pub fn start(
+    file: PathBuf,
+) -> (
+    Mp4FileReader<VideoDecoderOptions>,
+    Receiver<PipelineEvent<Frame>>,
+    Sender<MP4Command>,
+) {
     let (command_sender, command_receiver) = crossbeam_channel::bounded::<MP4Command>(1);
 
     let (file_reader, video_receiver) = create_mp4_reader_thread(file, command_receiver);
@@ -445,11 +466,7 @@ pub fn start(file: PathBuf) -> (Mp4FileReader<VideoDecoderOptions>, Receiver<Pip
             chunk_receiver,
         } => {
             let (sender, receiver) = crossbeam_channel::bounded(10);
-            start_video_decoder_thread(
-                decoder_options,
-                chunk_receiver,
-                sender,
-            );
+            start_video_decoder_thread(decoder_options, chunk_receiver, sender);
             receiver
         }
     };
@@ -473,7 +490,6 @@ enum DecoderChunkConversionError {
     )]
     BadPayloadType(EncodedChunkKind),
 }
-
 
 fn chunk_to_av(chunk: EncodedChunk) -> Result<ffmpeg_next::Packet, DecoderChunkConversionError> {
     if chunk.kind != EncodedChunkKind::Video(VideoCodec::H264) {
@@ -510,7 +526,6 @@ fn copy_plane_from_av(decoded: &Video, plane: usize) -> bytes::Bytes {
 
     output_buffer.freeze()
 }
-
 
 fn frame_from_av(
     decoded: &mut Video,
@@ -633,8 +648,6 @@ fn run_decoder_thread(
         debug!("Failed to send EOS from H264 decoder. Channel closed.")
     }
 }
-
-
 
 pub fn start_ffmpeg_decoder_thread(
     chunks_receiver: Receiver<PipelineEvent<EncodedChunk>>,
