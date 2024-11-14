@@ -19,6 +19,7 @@ mod pipelines;
 mod video;
 mod window;
 
+use std::cell::RefCell;
 use crate::camera::Camera;
 use crate::camera_controller::CameraController;
 use crate::camera_utils::process_camera_input;
@@ -38,6 +39,7 @@ use egui_wgpu::{wgpu, ScreenDescriptor};
 use glam::*;
 use std::error::Error;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::time::{Duration, Instant};
 use winit::{
     event::{ElementState, Event, WindowEvent},
@@ -57,12 +59,15 @@ fn print(s: String) {
 fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
 
-    let vm = VM::new();
+    let mut vm = VM::new();
 
     // Choose a video
-    let video_path = get_random_file_from_directory("/Volumes/dev/Shared/mp4")
-        .or_else(|| Some(PathBuf::from("/Users/cold/Desktop/YP-1R-05x13.mp4")))
-        .unwrap();
+    // let video_path = get_random_file_from_directory("/Volumes/dev/Shared/mp4")
+    //     .or_else(|| Some(PathBuf::from("/Users/cold/Desktop/YP-1R-05x13.mp4")))
+    //     .unwrap();
+
+    let video_path = PathBuf::from("/Users/cold/Desktop/YP-1R-05x13.mp4");
+
     println!("Now playing: {:?}", video_path);
 
     // Start playing
@@ -94,9 +99,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Init canvas
     let canvas_size = [512.0, 512.0];
-    let mut skia_canvas = Canvas::new(canvas_size[0] as u32, canvas_size[1] as u32);
-    skia_canvas.fill_rect(0.0, 0.0, 100.0, 100.0);
-    let canvas_data = skia_canvas.as_bytes()?;
+    let mut skia_canvas = Rc::new(RefCell::new(Canvas::new(canvas_size[0] as u32, canvas_size[1] as u32)));
+
+    let canvas_data = skia_canvas.borrow_mut().as_bytes()?;
     let skia_gpu_texture = GPUTexture::create(
         &ctx,
         canvas_size[0] as u32,
@@ -160,7 +165,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut gizmo_example = GizmoExample::new();
 
     let mut language = String::from("js");
-    let mut code = String::from("const print = str => console.log(str);");
+    let mut code = String::from(include_str!("../js/rd.js"));
+
+    let mut frame_count = 0;
 
     event_loop.run(|event, window_target| {
         window_target.set_control_flow(ControlFlow::Poll);
@@ -243,6 +250,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                             }
                         };
 
+                        if frame_count < 100 {
+
+
                         // Try to update video texture
                         if let Ok(event) = video_receiver.try_recv() {
                             match event {
@@ -256,14 +266,16 @@ fn main() -> Result<(), Box<dyn Error>> {
                                                 &planes.y_plane,
                                                 &planes.u_plane,
                                                 &planes.v_plane,
-                                            );
+                                                );
+                                            }
                                         }
                                     }
-                                }
-                                PipelineEvent::EOS => {
-                                    println!("Got end of stream");
+                                    PipelineEvent::EOS => {
+                                        println!("Got end of stream");
+                                    }
                                 }
                             }
+                            frame_count += 1;
                         }
 
                         // This will be used for both main render pass and egui render pass
@@ -346,14 +358,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                                     if ui.button("Add Square").clicked() {
                                         square_dist += 50.0;
 
-                                        skia_canvas.fill_rect(
+                                        skia_canvas.borrow_mut().fill_rect(
                                             square_dist,
                                             square_dist,
                                             100.0 + square_dist,
                                             100.0 + square_dist,
                                         );
 
-                                        let example_data = skia_canvas.as_bytes().unwrap();
+                                        let example_data = skia_canvas.borrow_mut().as_bytes().unwrap();
                                         skia_gpu_texture.update(&ctx, &example_data);
                                     }
                                 });
@@ -514,7 +526,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                                     });
 
                                     if ui.button("Eval").clicked() {
-                                        vm.eval(&code);
+                                        vm.eval_with_canvas(code.clone(), skia_canvas.clone());
+
+                                        let new_texture_sync = skia_canvas.borrow_mut().as_bytes().unwrap();
+                                        skia_gpu_texture.update(&ctx, &new_texture_sync);
                                     }
                                 });
 
