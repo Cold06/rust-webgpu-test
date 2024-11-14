@@ -1,10 +1,5 @@
-use bytes::{Buf, Bytes, BytesMut};
 use crossbeam_channel::{Receiver, Sender};
-use ffmpeg_next::codec::{Context, Id};
-use ffmpeg_next::format::Pixel;
-use ffmpeg_next::frame::Video;
-use ffmpeg_next::media::Type;
-use ffmpeg_next::Rational;
+use ffmpeg_next::{codec, format, frame, media};
 use mp4::Mp4Reader;
 use std::io::{Read, Seek, SeekFrom};
 use std::os::unix::fs::MetadataExt;
@@ -14,18 +9,13 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::{debug, error, span, trace, warn};
 
-use crate::video::reader::{PipelineEvent, VideoDecoderOptions, EncodedChunk, VideoDecoder, EncodedChunkKind, VideoCodec};
+use crate::video::reader::{EncodedChunk, PipelineEvent};
 
 pub fn start_video_decoder_thread(
-    options: VideoDecoderOptions,
     chunks_receiver: Receiver<PipelineEvent<EncodedChunk>>,
     frame_sender: Sender<PipelineEvent<Frame>>,
 ) {
-    match options.decoder {
-        VideoDecoder::FFmpegH264 => {
-            start_ffmpeg_decoder_thread(chunks_receiver, frame_sender).unwrap()
-        }
-    };
+    start_ffmpeg_decoder_thread(chunks_receiver, frame_sender).unwrap()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -67,26 +57,14 @@ pub enum InputInitError {
     CannotReadInitResult,
 }
 
-#[derive(Debug, thiserror::Error)]
-enum DecoderChunkConversionError {
-    #[error(
-        "Cannot send a chunk of kind {0:?} to the decoder. The decoder only handles H264-encoded video."
-    )]
-    BadPayloadType(EncodedChunkKind),
-}
-
-fn chunk_to_av(chunk: EncodedChunk) -> Result<ffmpeg_next::Packet, DecoderChunkConversionError> {
-    if chunk.kind != EncodedChunkKind::Video(VideoCodec::H264) {
-        return Err(DecoderChunkConversionError::BadPayloadType(chunk.kind));
-    }
-
+fn chunk_to_av(chunk: EncodedChunk) -> ffmpeg_next::Packet {
     let mut packet = ffmpeg_next::Packet::new(chunk.data.len());
 
     packet.data_mut().unwrap().copy_from_slice(&chunk.data);
     packet.set_pts(Some(chunk.pts.as_micros() as i64));
     packet.set_dts(chunk.dts.map(|dts| dts.as_micros() as i64));
 
-    Ok(packet)
+    packet
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -94,10 +72,10 @@ enum DecoderFrameConversionError {
     #[error("Error converting frame: {0}")]
     FrameConversionError(String),
     #[error("Unsupported pixel format: {0:?}")]
-    UnsupportedPixelFormat(ffmpeg_next::format::pixel::Pixel),
+    UnsupportedPixelFormat(format::pixel::Pixel),
 }
 
-fn copy_plane_from_av(decoded: &Video, plane: usize) -> bytes::Bytes {
+fn copy_plane_from_av(decoded: &frame::Video, plane: usize) -> bytes::Bytes {
     let mut output_buffer = bytes::BytesMut::with_capacity(
         decoded.plane_width(plane) as usize * decoded.plane_height(plane) as usize,
     );
@@ -112,7 +90,7 @@ fn copy_plane_from_av(decoded: &Video, plane: usize) -> bytes::Bytes {
 }
 
 fn frame_from_av(
-    decoded: &mut Video,
+    decoded: &mut frame::Video,
     pts_offset: &mut Option<i64>,
 ) -> Result<Frame, DecoderFrameConversionError> {
     let original_pts = decoded.pts();
@@ -129,7 +107,7 @@ fn frame_from_av(
     }
     let pts = Duration::from_micros(i64::max(pts, 0) as u64);
     let data = match decoded.format() {
-        Pixel::YUV420P => FrameData::PlanarYuv420(YuvPlanes {
+        format::Pixel::YUV420P => FrameData::PlanarYuv420(YuvPlanes {
             y_plane: copy_plane_from_av(decoded, 0),
             u_plane: copy_plane_from_av(decoded, 1),
             v_plane: copy_plane_from_av(decoded, 2),
@@ -152,22 +130,22 @@ fn run_decoder_thread(
     chunks_receiver: Receiver<PipelineEvent<EncodedChunk>>,
     frame_sender: Sender<PipelineEvent<Frame>>,
 ) {
-    let decoder = Context::from_parameters(parameters.clone())
+    let ffmpeg_decoder = codec::Context::from_parameters(parameters.clone())
         .map_err(InputInitError::FfmpegError)
         .and_then(|mut decoder| {
             unsafe {
                 // This is because we use microseconds as pts and dts in the packets.
                 // See `chunk_to_av` and `frame_from_av`.
-                (*decoder.as_mut_ptr()).pkt_timebase = Rational::new(1, 1_000_000).into();
+                (*decoder.as_mut_ptr()).pkt_timebase = ffmpeg_next::Rational::new(1, 1_000_000).into();
             }
 
             let decoder = decoder.decoder();
             decoder
-                .open_as(Into::<Id>::into(parameters.id()))
+                .open_as(Into::<codec::Id>::into(parameters.id()))
                 .map_err(InputInitError::FfmpegError)
         });
 
-    let mut decoder = match decoder {
+    let mut ffmpeg_context = match ffmpeg_decoder {
         Ok(decoder) => {
             init_result_sender.send(Ok(())).unwrap();
             decoder
@@ -178,7 +156,7 @@ fn run_decoder_thread(
         }
     };
 
-    let mut decoded_frame = ffmpeg_next::frame::Video::empty();
+    let mut decoded_frame = frame::Video::empty();
     let mut pts_offset = None;
 
     for chunk in chunks_receiver {
@@ -188,23 +166,10 @@ fn run_decoder_thread(
                 break;
             }
         };
-        if chunk.kind != EncodedChunkKind::Video(VideoCodec::H264) {
-            println!(
-                "H264 decoder received chunk of wrong kind: {:?}",
-                chunk.kind
-            );
-            continue;
-        }
 
-        let av_packet: ffmpeg_next::Packet = match chunk_to_av(chunk) {
-            Ok(packet) => packet,
-            Err(err) => {
-                warn!("Dropping frame: {}", err);
-                continue;
-            }
-        };
+        let av_packet = chunk_to_av(chunk);
 
-        match decoder.send_packet(&av_packet) {
+        match ffmpeg_context.send_packet(&av_packet) {
             Ok(()) => {}
             Err(e) => {
                 warn!("Failed to send a packet to decoder: {}", e);
@@ -212,20 +177,19 @@ fn run_decoder_thread(
             }
         }
 
-        while decoder.receive_frame(&mut decoded_frame).is_ok() {
+
+        while ffmpeg_context.receive_frame(&mut decoded_frame).is_ok() {
             let frame = match frame_from_av(&mut decoded_frame, &mut pts_offset) {
                 Ok(frame) => frame,
-                Err(err) => {
-                    warn!("Dropping frame: {}", err);
+                Err(_) => {
                     continue;
                 }
             };
 
-            trace!(pts=?frame.pts, "H264 decoder produced a frame.");
             if frame_sender.send(PipelineEvent::Data(frame)).is_err() {
-                debug!("Failed to send frame from H264 decoder. Channel closed.");
                 return;
             }
+            std::thread::sleep(Duration::from_millis(24));
         }
     }
     if frame_sender.send(PipelineEvent::EOS).is_err() {
@@ -244,8 +208,8 @@ pub fn start_ffmpeg_decoder_thread(
     unsafe {
         let parameters = &mut *parameters.as_mut_ptr();
 
-        parameters.codec_type = Type::Video.into();
-        parameters.codec_id = Id::H264.into();
+        parameters.codec_type = media::Type::Video.into();
+        parameters.codec_id = codec::Id::H264.into();
     };
 
     std::thread::Builder::new()
