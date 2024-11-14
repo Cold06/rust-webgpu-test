@@ -1,10 +1,10 @@
 use crate::camera::Camera;
 use crate::gpu::GPUCtx;
 use crate::pipelines::video;
-use crate::video::Resolution;
 use bytemuck::NoUninit;
 use egui_wgpu::wgpu;
 use glam::*;
+use crate::video::Resolution;
 
 pub struct VideoDemo {
     bind_group_0: video::BindGroup0,
