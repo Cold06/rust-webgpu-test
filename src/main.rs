@@ -19,7 +19,6 @@ mod pipelines;
 mod video;
 mod window;
 
-use std::cell::RefCell;
 use crate::camera::Camera;
 use crate::camera_controller::CameraController;
 use crate::camera_utils::process_camera_input;
@@ -37,6 +36,7 @@ use egui::ImageSource;
 use egui_wgpu::wgpu::FilterMode;
 use egui_wgpu::{wgpu, ScreenDescriptor};
 use glam::*;
+use std::cell::RefCell;
 use std::error::Error;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -79,6 +79,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Init graphics
     let (ctx, mut os_window) = GPUCtx::new(&event_loop);
     let window_size = os_window.window.inner_size();
+    let high_dpi_factor = 2.0 * os_window.window.scale_factor() as f32;
+
+    os_window.window.set_maximized(true);
 
     // Create depth textures
     let mut main_render_target_depth =
@@ -98,15 +101,19 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut video_demo = VideoDemo::create(&ctx, &os_window.surface_configuration);
 
     // Init canvas
-    let canvas_size = [512.0, 512.0];
-    let mut skia_canvas = Rc::new(RefCell::new(Canvas::new(canvas_size[0] as u32, canvas_size[1] as u32)));
+    let canvas_size = [1000.0 * high_dpi_factor, 1000.0 * high_dpi_factor];
+    let mut skia_canvas = Rc::new(RefCell::new(Canvas::new(
+        canvas_size[0] as u32,
+        canvas_size[1] as u32,
+        high_dpi_factor,
+    )));
 
     let canvas_data = skia_canvas.borrow_mut().as_bytes()?;
     let skia_gpu_texture = GPUTexture::create(
         &ctx,
         canvas_size[0] as u32,
         canvas_size[1] as u32,
-        wgpu::TextureFormat::Rgba8Unorm,
+        wgpu::TextureFormat::Rgba8UnormSrgb,
         Filler0(0, 0, 0, 255),
         wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
     );
@@ -165,7 +172,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut gizmo_example = GizmoExample::new();
 
     let mut language = String::from("js");
-    let mut code = String::from(include_str!("../js/rd.js"));
+    let mut code = String::from(include_str!("../js/outline.js"));
 
     let mut frame_count = 0;
 
@@ -217,14 +224,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                         button: winit::event::MouseButton::Left,
                         ..
                     } => {
-                        if !egui_renderer.state.egui_ctx().is_pointer_over_area() {
-                            os_window
-                                .window
-                                .set_cursor_grab(CursorGrabMode::Locked)
-                                .unwrap();
-                            os_window.window.set_cursor_visible(false);
-                            focused = true;
-                        }
+                        // if !egui_renderer.state.egui_ctx().is_pointer_over_area() {
+                        //     os_window
+                        //         .window
+                        //         .set_cursor_grab(CursorGrabMode::Locked)
+                        //         .unwrap();
+                        //     os_window.window.set_cursor_visible(false);
+                        //     focused = true;
+                        // }
                     }
                     WindowEvent::RedrawRequested => {
                         // Compute Delta
@@ -250,22 +257,20 @@ fn main() -> Result<(), Box<dyn Error>> {
                             }
                         };
 
-                        if frame_count < 100 {
+                        if frame_count < 10000 {
+                            // Try to update video texture
+                            if let Ok(event) = video_receiver.try_recv() {
+                                match event {
+                                    PipelineEvent::Data(frame) => {
+                                        video_demo.check_resize(&ctx, frame.resolution);
 
-
-                        // Try to update video texture
-                        if let Ok(event) = video_receiver.try_recv() {
-                            match event {
-                                PipelineEvent::Data(frame) => {
-                                    video_demo.check_resize(&ctx, frame.resolution);
-
-                                    match frame.data {
-                                        FrameData::PlanarYuv420(planes) => {
-                                            video_demo.update_texture(
-                                                &ctx,
-                                                &planes.y_plane,
-                                                &planes.u_plane,
-                                                &planes.v_plane,
+                                        match frame.data {
+                                            FrameData::PlanarYuv420(planes) => {
+                                                video_demo.update_texture(
+                                                    &ctx,
+                                                    &planes.y_plane,
+                                                    &planes.u_plane,
+                                                    &planes.v_plane,
                                                 );
                                             }
                                         }
@@ -300,24 +305,24 @@ fn main() -> Result<(), Box<dyn Error>> {
                             };
 
                         // Render main pass
-                        {
-                            let color_view = frame_view;
-                            let depth_view = &main_render_target_depth
-                                .depth_stencil
-                                .create_view(&Default::default());
-
-                            render_pass(&main_camera, color_view, depth_view);
-                        }
+                        // {
+                        //     let color_view = frame_view;
+                        //     let depth_view = &main_render_target_depth
+                        //         .depth_stencil
+                        //         .create_view(&Default::default());
+                        //
+                        //     render_pass(&main_camera, color_view, depth_view);
+                        // }
 
                         // Render Second Pass
-                        {
-                            let color_view = &secondary_rt_gpu_texture.view;
-                            let depth_view = &secondary_render_target_depth
-                                .depth_stencil
-                                .create_view(&wgpu::TextureViewDescriptor::default());
-
-                            render_pass(&secondary_camera, color_view, depth_view);
-                        }
+                        // {
+                        //     let color_view = &secondary_rt_gpu_texture.view;
+                        //     let depth_view = &secondary_render_target_depth
+                        //         .depth_stencil
+                        //         .create_view(&wgpu::TextureViewDescriptor::default());
+                        //
+                        //     render_pass(&secondary_camera, color_view, depth_view);
+                        // }
 
                         // Render ImGUI
                         {
@@ -335,24 +340,32 @@ fn main() -> Result<(), Box<dyn Error>> {
                                     * scale_factor,
                             };
 
-                            egui::SidePanel::left("options_panel").show(
-                                egui_renderer.context(),
-                                |ui| {
-                                    gizmo_example.draw_options(ui);
-                                },
-                            );
+                            // egui::SidePanel::left("options_panel").show(
+                            //     egui_renderer.context(),
+                            //     |ui| {
+                            //         gizmo_example.draw_options(ui);
+                            //     },
+                            // );
 
                             egui::Window::new("Canvas Example")
-                                .default_size([512.0, 512.0])
+                                .default_size([512.0, 612.0])
                                 .resizable(true)
                                 .hscroll(true)
                                 .vscroll(true)
                                 .show(egui_renderer.context(), |ui| {
-                                    ui.label(format!("Size {}", ui.available_size()));
+                                    ui.label(format!("Available Size {}", ui.available_size()));
+                                    ui.label(format!(
+                                        "Inner Size {:#?}",
+                                        os_window.window.inner_size()
+                                    ));
+                                    ui.label(format!("Size {:#?}", os_window.window.outer_size()));
 
                                     ui.image(ImageSource::Texture(SizedTexture::new(
                                         canvas_texture_id,
-                                        canvas_size,
+                                        (
+                                            canvas_size[0] / high_dpi_factor,
+                                            canvas_size[0] / high_dpi_factor,
+                                        ),
                                     )));
 
                                     if ui.button("Add Square").clicked() {
@@ -365,135 +378,117 @@ fn main() -> Result<(), Box<dyn Error>> {
                                             100.0 + square_dist,
                                         );
 
-                                        let example_data = skia_canvas.borrow_mut().as_bytes().unwrap();
+                                        let example_data =
+                                            skia_canvas.borrow_mut().as_bytes().unwrap();
                                         skia_gpu_texture.update(&ctx, &example_data);
                                     }
                                 });
 
-                            egui::Window::new("Camera")
-                                .default_size([170.0, 260.0])
-                                .resizable(true)
-                                .hscroll(true)
-                                .vscroll(true)
-                                .show(egui_renderer.context(), |ui| {
-                                    ui.label(format!(
-                                        "Main Camera {}",
-                                        if !use_secondary_camera {
-                                            "(active)"
-                                        } else {
-                                            ""
-                                        }
-                                    ));
-                                    ui.label(format!("   X {}", main_camera.view.position.x));
-                                    ui.label(format!("   Y {}", main_camera.view.position.y));
-                                    ui.label(format!("   Z {}", main_camera.view.position.z));
-                                    ui.label(format!("   Pitch {}", main_camera.view.yaw_pitch.x));
-                                    ui.label(format!("   Yaw {}", main_camera.view.yaw_pitch.y));
-                                    ui.label(format!(
-                                        "Debug Camera {}",
-                                        if use_secondary_camera { "(active)" } else { "" }
-                                    ));
-                                    ui.label(format!("   X {}", secondary_camera.view.position.x));
-                                    ui.label(format!("   Y {}", secondary_camera.view.position.y));
-                                    ui.label(format!("   Z {}", secondary_camera.view.position.z));
-                                    ui.label(format!(
-                                        "   Pitch {}",
-                                        secondary_camera.view.yaw_pitch.x
-                                    ));
-                                    ui.label(format!(
-                                        "   Yaw {}",
-                                        secondary_camera.view.yaw_pitch.y
-                                    ));
-                                });
+                            // egui::Window::new("Camera")
+                            //     .default_size([170.0, 260.0])
+                            //     .resizable(true)
+                            //     .hscroll(true)
+                            //     .vscroll(true)
+                            //     .show(egui_renderer.context(), |ui| {
+                            //         ui.label(format!(
+                            //             "Main Camera {}",
+                            //             if !use_secondary_camera {
+                            //                 "(active)"
+                            //             } else {
+                            //                 ""
+                            //             }
+                            //         ));
+                            //         ui.label(format!("   X {}", main_camera.view.position.x));
+                            //         ui.label(format!("   Y {}", main_camera.view.position.y));
+                            //         ui.label(format!("   Z {}", main_camera.view.position.z));
+                            //         ui.label(format!("   Pitch {}", main_camera.view.yaw_pitch.x));
+                            //         ui.label(format!("   Yaw {}", main_camera.view.yaw_pitch.y));
+                            //         ui.label(format!(
+                            //             "Debug Camera {}",
+                            //             if use_secondary_camera { "(active)" } else { "" }
+                            //         ));
+                            //         ui.label(format!("   X {}", secondary_camera.view.position.x));
+                            //         ui.label(format!("   Y {}", secondary_camera.view.position.y));
+                            //         ui.label(format!("   Z {}", secondary_camera.view.position.z));
+                            //         ui.label(format!(
+                            //             "   Pitch {}",
+                            //             secondary_camera.view.yaw_pitch.x
+                            //         ));
+                            //         ui.label(format!(
+                            //             "   Yaw {}",
+                            //             secondary_camera.view.yaw_pitch.y
+                            //         ));
+                            //     });
 
-                            egui::Window::new("Renderer Example")
-                                .default_size([512.0, 512.0])
-                                .resizable(true)
-                                .hscroll(true)
-                                .vscroll(true)
-                                .show(egui_renderer.context(), |ui| {
-                                    ui.image(ImageSource::Texture(SizedTexture::new(
-                                        secondary_rt_texture_id,
-                                        [
-                                            (window_size.width as f32) / 6.0,
-                                            (window_size.height as f32) / 6.0,
-                                        ],
-                                    )));
-                                    gizmo_example.draw_gizmo(
-                                        ui,
-                                        &secondary_camera,
-                                        (window_size.width as f32) / 6.0,
-                                        (window_size.height as f32) / 6.0,
-                                    );
-                                });
+                            // egui::Window::new("Renderer Example")
+                            //     .default_size([512.0, 512.0])
+                            //     .resizable(true)
+                            //     .hscroll(true)
+                            //     .vscroll(true)
+                            //     .show(egui_renderer.context(), |ui| {
+                            //         ui.image(ImageSource::Texture(SizedTexture::new(
+                            //             secondary_rt_texture_id,
+                            //             [
+                            //                 (window_size.width as f32) / 6.0,
+                            //                 (window_size.height as f32) / 6.0,
+                            //             ],
+                            //         )));
+                            //         gizmo_example.draw_gizmo(
+                            //             ui,
+                            //             &secondary_camera,
+                            //             (window_size.width as f32) / 6.0,
+                            //             (window_size.height as f32) / 6.0,
+                            //         );
+                            //     });
 
-                            egui::Window::new("Chunk Manager")
-                                .default_size([170.0, 260.0])
-                                .resizable(true)
-                                .hscroll(true)
-                                .vscroll(true)
-                                .show(egui_renderer.context(), |ui| {
-                                    if ui.button("Spawn Chunk").clicked() {
-                                        chunks_demo.spawn_chunk(&ctx);
-                                    }
-                                });
+                            // egui::Window::new("Chunk Manager")
+                            //     .default_size([170.0, 260.0])
+                            //     .resizable(true)
+                            //     .hscroll(true)
+                            //     .vscroll(true)
+                            //     .show(egui_renderer.context(), |ui| {
+                            //         if ui.button("Spawn Chunk").clicked() {
+                            //             chunks_demo.spawn_chunk(&ctx);
+                            //         }
+                            //     });
 
-                            egui::Window::new("Video")
-                                .resizable(true)
-                                .hscroll(true)
-                                .vscroll(true)
-                                .show(egui_renderer.context(), |ui| {
-                                    if ui.button("Pause").clicked() {
-                                        command_sender.try_send(MP4Command::Pause);
-                                    }
-                                    if ui.button("Play").clicked() {
-                                        command_sender.try_send(MP4Command::Play);
-                                    }
-                                    if ui.button("Stop").clicked() {
-                                        command_sender.try_send(MP4Command::Stop);
-                                    }
-                                    if ui.button("SkipForward").clicked() {
-                                        command_sender.try_send(MP4Command::SkipForward);
-                                    }
-                                    if ui.button("SkipBackward").clicked() {
-                                        command_sender.try_send(MP4Command::SkipBackward);
-                                    }
-                                    if ui.button("Seek(Duration)").clicked() {
-                                        command_sender.try_send(MP4Command::Seek(Duration::from_millis(0)));
-                                    }
-                                });
-
+                            // egui::Window::new("Video")
+                            //     .resizable(true)
+                            //     .hscroll(true)
+                            //     .vscroll(true)
+                            //     .show(egui_renderer.context(), |ui| {
+                            //         if ui.button("Pause").clicked() {
+                            //             command_sender.try_send(MP4Command::Pause);
+                            //         }
+                            //         if ui.button("Play").clicked() {
+                            //             command_sender.try_send(MP4Command::Play);
+                            //         }
+                            //         if ui.button("Stop").clicked() {
+                            //             command_sender.try_send(MP4Command::Stop);
+                            //         }
+                            //         if ui.button("SkipForward").clicked() {
+                            //             command_sender.try_send(MP4Command::SkipForward);
+                            //         }
+                            //         if ui.button("SkipBackward").clicked() {
+                            //             command_sender.try_send(MP4Command::SkipBackward);
+                            //         }
+                            //         if ui.button("Seek(Duration)").clicked() {
+                            //             command_sender.try_send(MP4Command::Seek(Duration::from_millis(0)));
+                            //         }
+                            //     });
 
                             egui::Window::new("Code Editor")
                                 .resizable(true)
                                 .hscroll(true)
                                 .vscroll(true)
-                                .default_height(500.0)
+                                .default_height(600.0)
                                 .show(egui_renderer.context(), |ui| {
-                                    if cfg!(feature = "syntect") {
-                                        ui.horizontal(|ui| {
-                                            ui.label("Language:");
-                                            ui.text_edit_singleline(&mut language);
-                                        });
-                                        ui.horizontal_wrapped(|ui| {
-                                            ui.spacing_mut().item_spacing.x = 0.0;
-                                            ui.label("Syntax highlighting powered by ");
-                                            ui.hyperlink_to("syntect", "https://github.com/trishume/syntect");
-                                            ui.label(".");
-                                        });
-                                    } else {
-                                        ui.horizontal_wrapped(|ui| {
-                                            ui.spacing_mut().item_spacing.x = 0.0;
-                                            ui.label("Compile the demo with the ");
-                                            ui.code("syntax_highlighting");
-                                            ui.label(" feature to enable more accurate syntax highlighting using ");
-                                            ui.hyperlink_to("syntect", "https://github.com/trishume/syntect");
-                                            ui.label(".");
-                                        });
-                                    }
-
                                     let mut theme =
-                                        egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx(), ui.style());
+                                        egui_extras::syntax_highlighting::CodeTheme::from_memory(
+                                            ui.ctx(),
+                                            ui.style(),
+                                        );
+
                                     ui.collapsing("Theme", |ui| {
                                         ui.group(|ui| {
                                             theme.ui(ui);
@@ -501,17 +496,31 @@ fn main() -> Result<(), Box<dyn Error>> {
                                         });
                                     });
 
-                                    let mut layouter = |ui: &egui::Ui, string: &str, wrap_width: f32| {
-                                        let mut layout_job = egui_extras::syntax_highlighting::highlight(
-                                            ui.ctx(),
-                                            ui.style(),
-                                            &theme,
-                                            string,
-                                            &mut language,
-                                        );
-                                        layout_job.wrap.max_width = wrap_width;
-                                        ui.fonts(|f| f.layout_job(layout_job))
-                                    };
+                                    let mut layouter =
+                                        |ui: &egui::Ui, string: &str, wrap_width: f32| {
+                                            let mut layout_job =
+                                                egui_extras::syntax_highlighting::highlight(
+                                                    ui.ctx(),
+                                                    ui.style(),
+                                                    &theme,
+                                                    string,
+                                                    &mut language,
+                                                );
+                                            layout_job.wrap.max_width = wrap_width;
+                                            ui.fonts(|f| f.layout_job(layout_job))
+                                        };
+
+                                    if ui.button("Eval").clicked() {
+                                        {
+                                            skia_canvas.borrow_mut().clear();
+                                        }
+
+                                        vm.eval_with_canvas(code.clone(), skia_canvas.clone());
+
+                                        let new_texture_sync =
+                                            skia_canvas.borrow_mut().as_bytes().unwrap();
+                                        skia_gpu_texture.update(&ctx, &new_texture_sync);
+                                    }
 
                                     egui::ScrollArea::vertical().show(ui, |ui| {
                                         ui.add(
@@ -524,13 +533,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                                                 .layouter(&mut layouter),
                                         );
                                     });
-
-                                    if ui.button("Eval").clicked() {
-                                        vm.eval_with_canvas(code.clone(), skia_canvas.clone());
-
-                                        let new_texture_sync = skia_canvas.borrow_mut().as_bytes().unwrap();
-                                        skia_gpu_texture.update(&ctx, &new_texture_sync);
-                                    }
                                 });
 
                             egui_renderer.end_frame_and_draw(
@@ -541,8 +543,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 &frame_view,
                                 screen_descriptor,
                             );
-
-
 
                             ctx.queue.submit(Some(encoder.finish()));
                         }

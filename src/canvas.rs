@@ -19,7 +19,7 @@ pub struct Canvas {
 }
 
 impl Canvas {
-    pub fn new(width: u32, height: u32) -> Canvas {
+    pub fn new(width: u32, height: u32, high_dpi_factor: f32) -> Canvas {
         let mut surface =
             surfaces::raster_n32_premul((width as i32, height as i32)).expect("surface");
         let path = Path::new();
@@ -28,6 +28,7 @@ impl Canvas {
         paint.set_anti_alias(true);
         paint.set_stroke_width(1.0);
         surface.canvas().clear(Color::WHITE);
+        surface.canvas().scale((high_dpi_factor, high_dpi_factor));
 
         let mut fill_style = Paint::default();
         fill_style.set_style(Style::Fill);
@@ -146,6 +147,10 @@ impl Canvas {
             },
             &self.paint,
         );
+    }
+
+    pub fn clear(&mut self) {
+        self.surface.canvas().clear(Color::WHITE);
     }
 
     #[inline]
@@ -273,12 +278,13 @@ impl Canvas {
     }
 
     pub fn js_call_begin_path(&mut self) {
-        let new_path = Path::new();
-        self.surface.canvas().draw_path(&self.path, &self.fill_style);
-        let _ = mem::replace(&mut self.path, new_path);
+        drop(mem::replace(&mut self.path, Path::new()));
     }
 
-    pub fn js_call_rect(&mut self, x: f64, y: f64, width: f64, height: f64) {}
+    pub fn js_call_rect(&mut self, x: f64, y: f64, width: f64, height: f64) {
+        self.path.add_rect(Rect::new(x as f32, y as f32, (x as f32) + (width as f32), (y as f32) + (height as f32)), None);
+        self.path.close();
+    }
 
     pub fn js_call_fill(&mut self) {
         self.fill_style.set_style(PaintStyle::Fill);
@@ -287,6 +293,21 @@ impl Canvas {
 
     pub fn js_call_move_to(&mut self, x: f64, y: f64) {
         self.path.move_to((x as f32, y as f32));
+    }
+
+    pub fn js_call_arc(&mut self, x: f64, y: f64, radius: f64, start_angle: f64, end_angle: f64, counterclockwise: bool) {
+        let r = radius as f32;
+
+        self.path.add_arc(
+            Rect {
+                top: (y as f32) - r,
+                left: (x as f32) - r,
+                bottom: (y as f32) + r,
+                right: (x as f32) + r,
+            },
+            start_angle as f32,
+            end_angle as f32
+        );
     }
 
     pub fn js_call_line_to(&mut self, x: f64, y: f64) {

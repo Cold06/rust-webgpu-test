@@ -75,6 +75,10 @@ globalThis.console = {
                 let canvas_15 = canvas.clone();
                 let canvas_16 = canvas.clone();
                 let canvas_17 = canvas.clone();
+                let canvas_18 = canvas.clone();
+
+
+
 
                 global
                     .set(
@@ -285,6 +289,19 @@ globalThis.console = {
                         .unwrap(),
                     )
                     .unwrap();
+                global
+                    .set(
+                        "__js_call_arc",
+                        Function::new(ctx.clone(), move |x: f64, y: f64, radius: f64, start_angle: f64, end_angle: f64, counterclockwise: bool| {
+                            canvas_18.borrow_mut().js_call_arc(x, y, radius, start_angle, end_angle, counterclockwise);
+                        })
+                            .unwrap()
+                            .with_name("__js_call_arc")
+                            .unwrap(),
+                    )
+                    .unwrap();
+
+
 
                 ctx.eval::<(), _>(
                     r#"
@@ -308,16 +325,26 @@ globalThis.ctx = {
   transform(...args) { globalThis.__js_call_transform(...args); },
   stroke(...args) { globalThis.__js_call_stroke(...args); },
   restore(...args) { globalThis.__js_call_restore(...args); },
+  arc(...args) { globalThis.__js_call_arc(...args); },
 };
 "#,
                 )
                 .unwrap();
+
+
+                {
+                    canvas.borrow_mut().save();
+                }
 
                 match ctx.eval::<(), _>(code) {
                     Ok(_) => {}
                     Err(err) => {
                         println!("{err}");
                     }
+                }
+
+                {
+                    canvas.borrow_mut().js_call_restore();
                 }
 
                 Ok(())
