@@ -1,6 +1,6 @@
 {
-    let s = 8;
-    let ss = 0.22;
+    let s = 5;
+    let ss = 0.6;
     ctx.transform(ss, 0.000000, 0.000000, ss, -35.120100, 17.776800);
     ctx.save();
     ctx.scale(s, s);
