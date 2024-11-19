@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="1000"
+   height="1000"
+   viewBox="0 0 1000 1000"
+   version="1.1"
+   id="svg1"
+   inkscape:version="1.4 (e7c3feb1, 2024-10-09)"
+   sodipodi:docname="polygons.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="true"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="true"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="px"
+     inkscape:clip-to-page="false"
+     borderlayer="true"
+     inkscape:zoom="0.91677352"
+     inkscape:cx="610.83789"
+     inkscape:cy="515.93986"
+     inkscape:window-width="2304"
+     inkscape:window-height="1243"
+     inkscape:window-x="0"
+     inkscape:window-y="25"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="layer1" />
+  <defs
+     id="defs1" />
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <path
+       style="fill:#0040ff;fill-opacity:1;stroke:#ff0000;stroke-width:24;stroke-dasharray:none;stroke-opacity:1"
+       d="M 317.41755,57.811443 43.631278,520.30299 926.07388,940.25404 Z"
+       id="path14" />
+    <path
+       style="fill:#0040ff;fill-opacity:1;stroke:#ff0000;stroke-width:24;stroke-dasharray:none;stroke-opacity:1"
+       d="M 722.09765,133.0754 80.717864,859.53617 885.71494,387.22759 Z"
+       id="path15" />
+  </g>
+</svg>

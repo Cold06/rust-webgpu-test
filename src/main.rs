@@ -22,7 +22,7 @@ mod window;
 use crate::camera::Camera;
 use crate::camera_controller::CameraController;
 use crate::camera_utils::process_camera_input;
-use crate::canvas::Canvas;
+use crate::canvas::{render_svg, Canvas};
 use crate::demos::{ChunksDemo, VideoDemo};
 use crate::egui_tools::EguiRenderer;
 use crate::fs_utils::get_random_file_from_directory;
@@ -107,6 +107,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         canvas_size[1] as u32,
         high_dpi_factor,
     )));
+
+    {
+        let code = String::from(include_str!("/Users/cold/w/pony-render/svg/tier-5/complex-drawing.svg"));
+        render_svg(code, &mut skia_canvas.borrow_mut());
+    }
 
     let canvas_data = skia_canvas.borrow_mut().as_bytes()?;
     let skia_gpu_texture = GPUTexture::create(

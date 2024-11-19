@@ -1,7 +1,8 @@
 use std::mem;
 
+use skia_safe::svg::Dom;
 use skia_safe::paint::{Cap, Join, Style};
-use skia_safe::{surfaces, AlphaType, Color, Color4f, ColorType, Data, EncodedImageFormat, ImageInfo, Paint, PaintStyle, Path, Rect, Surface, M44};
+use skia_safe::{surfaces, AlphaType, Color, Color4f, ColorType, Data, EncodedImageFormat, FontMgr, ImageInfo, Paint, PaintStyle, Path, Rect, Surface, M44};
 
 pub struct Canvas {
     width: u32,
@@ -16,6 +17,10 @@ pub struct Canvas {
     line_cap: Cap,
     line_join: Join,
     miter_limit: f64,
+}
+
+pub fn render_svg(dom: String, canvas: &mut Canvas) {
+    Dom::from_str(dom, FontMgr::default()).unwrap().render(canvas.canvas());
 }
 
 impl Canvas {
