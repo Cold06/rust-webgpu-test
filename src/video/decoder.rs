@@ -189,7 +189,7 @@ fn run_decoder_thread(
             if frame_sender.send(PipelineEvent::Data(frame)).is_err() {
                 return;
             }
-            std::thread::sleep(Duration::from_millis(24));
+            std::thread::sleep(Duration::from_millis(16));
         }
     }
     if frame_sender.send(PipelineEvent::EOS).is_err() {

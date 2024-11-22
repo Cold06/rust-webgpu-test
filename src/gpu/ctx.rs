@@ -11,6 +11,15 @@ pub struct GPUCtx {
     pub queue: Rc<wgpu::Queue>,
 }
 
+impl Clone for GPUCtx {
+    fn clone(&self) -> Self {
+        Self {
+            device: self.device.clone(),
+            queue: self.queue.clone(),
+        }
+    }
+}
+
 impl GPUCtx {
     pub fn new(event_loop: &EventLoop<()>) -> (Self, OSWindow) {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {

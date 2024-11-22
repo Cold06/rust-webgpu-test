@@ -8,6 +8,7 @@ mod chunk;
 mod cube;
 mod demos;
 mod egui_tools;
+mod frontend;
 mod fs_utils;
 mod gizmo_example;
 mod gpu;
@@ -18,7 +19,6 @@ mod paint_utils;
 mod pipelines;
 mod video;
 mod window;
-mod frontend;
 
 use crate::camera::Camera;
 use crate::camera_controller::CameraController;
@@ -26,19 +26,14 @@ use crate::camera_utils::process_camera_input;
 use crate::canvas::{render_svg, Canvas};
 use crate::demos::{ChunksDemo, VideoDemo};
 use crate::egui_tools::EguiRenderer;
-use crate::fs_utils::get_random_file_from_directory;
-use crate::gizmo_example::GizmoExample;
+use crate::frontend::{TabViewer, UITab, UITabKind};
 use crate::gpu::{GPUCtx, GPUTexture, SView, ViewTarget};
 use crate::js::VM;
-use crate::video::{start, FrameData, MP4Command, PipelineEvent};
+use crate::video::{start, FrameData, PipelineEvent};
 use bytemuck::{Pod, Zeroable};
 use egui::load::SizedTexture;
-use egui::ImageSource;
-use egui::{
-    color_picker::{color_edit_button_srgba, Alpha},
-    vec2, CentralPanel, ComboBox, Frame, Rounding, Slider, TopBottomPanel, Ui, ViewportBuilder,
-    WidgetText,
-};
+use egui::{ImageSource, Margin};
+use egui_dock::{DockArea, DockState, NodeIndex, Style, SurfaceIndex};
 use egui_wgpu::wgpu::FilterMode;
 use egui_wgpu::{wgpu, ScreenDescriptor};
 use glam::*;
@@ -47,14 +42,12 @@ use std::error::Error;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
-use egui_dock::{DockArea, DockState, NodeIndex, Style, SurfaceIndex};
 use winit::{
     event::{ElementState, Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     keyboard::{Key, NamedKey},
     window::CursorGrabMode,
 };
-use crate::frontend::{TabViewer, UITab};
 
 #[repr(C)]
 #[derive(Pod, Copy, Clone, Zeroable)]
@@ -117,7 +110,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     )));
 
     {
-        let code = String::from(include_str!("/Users/cold/w/pony-render/svg/tier-5/complex-drawing.svg"));
+        let code = String::from(include_str!(
+            "/Users/cold/w/pony-render/svg/tier-5/complex-drawing.svg"
+        ));
         render_svg(code, &mut skia_canvas.borrow_mut());
     }
 
@@ -138,23 +133,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     );
 
     // Secondary view render attachments
-    let mut secondary_render_target_depth =
-        ViewTarget::create(&ctx, window_size.width, window_size.height);
-    let secondary_rt_gpu_texture = GPUTexture::create(
-        &ctx,
-        window_size.width,
-        window_size.height,
-        wgpu::TextureFormat::Bgra8UnormSrgb,
-        Filler0(0, 0, 0, 255),
-        wgpu::TextureUsages::COPY_DST
-            | wgpu::TextureUsages::RENDER_ATTACHMENT
-            | wgpu::TextureUsages::TEXTURE_BINDING,
-    );
-    let secondary_rt_texture_id = egui_renderer.renderer.register_native_texture(
-        &ctx.device,
-        &secondary_rt_gpu_texture.view,
-        FilterMode::Linear,
-    );
 
     // Main camera
     let mut main_camera = Camera::new(
@@ -167,14 +145,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     camera_controller.copy_camera_rotation(&main_camera);
 
     // Secondary camera
-    let mut secondary_camera = Camera::new(
-        Vec3::new(-50.0, 0.0, 0.0),
-        Vec2::ZERO,
-        window_size.width as f32,
-        window_size.height as f32,
-    );
-    let mut secondary_camera_controller = CameraController::new(200.0, 0.004);
-    secondary_camera_controller.copy_camera_rotation(&secondary_camera);
 
     // State
     let mut square_dist = 1.0;
@@ -182,16 +152,27 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut focused = false;
     let mut last_frame = Instant::now();
     let mut use_secondary_camera = false;
-    let mut gizmo_example = GizmoExample::new();
 
     let mut language = String::from("js");
     let mut code = String::from(include_str!("../js/outline.js"));
 
     let mut frame_count = 0;
 
+    // TODO: The API is trash
+    // The Tabs Should Be Rc<RefCell> by default
+    let world_view = Rc::new(RefCell::new(
+        frontend::WorldView::new(&ctx, &mut egui_renderer).into(),
+    ));
+
     let mut dock_state = DockState::new(vec![
-        UITab::regular(SurfaceIndex::main(), NodeIndex(1)),
-        UITab::fancy(SurfaceIndex::main(), NodeIndex(2)),
+        UITab::world_view(SurfaceIndex::main(), NodeIndex(1), world_view.clone()),
+        UITab::custom(
+            SurfaceIndex::main(),
+            NodeIndex(2),
+            Box::new(|ui| {
+                ui.label(format!("I'am JONH ULTRAKILL!!! {}", 0));
+            }),
+        ),
     ]);
 
     {
@@ -217,11 +198,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     event_loop.run(|event, window_target| {
         window_target.set_control_flow(ControlFlow::Poll);
 
-        if use_secondary_camera {
-            process_camera_input(focused, event.clone(), &mut secondary_camera_controller);
-        } else {
-            process_camera_input(focused, event.clone(), &mut camera_controller);
-        }
+        // TODO: focus management to know which view should process the inputs
+
+        // if use_secondary_camera {
+        //     process_camera_input(focused, event.clone(), &mut secondary_camera_controller);
+        // } else {
+        //     process_camera_input(focused, event.clone(), &mut camera_controller);
+        // }
 
         match event {
             Event::AboutToWait => {
@@ -281,10 +264,18 @@ fn main() -> Result<(), Box<dyn Error>> {
                         camera_controller.update_camera(&mut main_camera, delta);
                         main_camera.compute();
 
-                        secondary_camera_controller.update_camera(&mut secondary_camera, delta);
-                        secondary_camera.compute();
+                        // TODO: This is also TRASH we should not
+                        // need to match against the enum
+                        {
+                            match *world_view.borrow_mut() {
+                                UITabKind::WorldView(ref mut view) => {
+                                    let transform = view.get_transform(delta);
 
-                        video_demo.update_location(&ctx, gizmo_example.transform);
+                                    video_demo.update_location(&ctx, transform);
+                                }
+                                _ => {}
+                            }
+                        }
 
                         // Get Surface Texture
                         let frame = match os_window.surface.get_current_texture() {
@@ -295,30 +286,38 @@ fn main() -> Result<(), Box<dyn Error>> {
                             }
                         };
 
-                        if frame_count < 10000 {
-                            // Try to update video texture
-                            if let Ok(event) = video_receiver.try_recv() {
-                                match event {
-                                    PipelineEvent::Data(frame) => {
-                                        video_demo.check_resize(&ctx, frame.resolution);
+                        // Try to update video texture
+                        if let Ok(event) = video_receiver.try_recv() {
+                            match event {
+                                PipelineEvent::Data(frame) => {
+                                    video_demo.check_resize(&ctx, frame.resolution);
 
-                                        match frame.data {
-                                            FrameData::PlanarYuv420(planes) => {
-                                                video_demo.update_texture(
-                                                    &ctx,
-                                                    &planes.y_plane,
-                                                    &planes.u_plane,
-                                                    &planes.v_plane,
-                                                );
-                                            }
+                                    match frame.data {
+                                        FrameData::PlanarYuv420(planes) => {
+                                            video_demo.update_texture(
+                                                &ctx,
+                                                &planes.y_plane,
+                                                &planes.u_plane,
+                                                &planes.v_plane,
+                                            );
                                         }
                                     }
-                                    PipelineEvent::EOS => {
-                                        println!("Got end of stream");
-                                    }
+                                }
+                                PipelineEvent::EOS => {
+                                    println!("Got end of stream");
                                 }
                             }
-                            frame_count += 1;
+                        }
+                        frame_count += 1;
+
+                        // TODO: trash again
+                        {
+                            match *world_view.borrow_mut() {
+                                UITabKind::WorldView(ref mut view) => {
+                                    view.on_egui(&mut egui_renderer);
+                                }
+                                _ => {}
+                            }
                         }
 
                         // This will be used for both main render pass and egui render pass
@@ -353,14 +352,16 @@ fn main() -> Result<(), Box<dyn Error>> {
                         // }
 
                         // Render Second Pass
-                        // {
-                        //     let color_view = &secondary_rt_gpu_texture.view;
-                        //     let depth_view = &secondary_render_target_depth
-                        //         .depth_stencil
-                        //         .create_view(&wgpu::TextureViewDescriptor::default());
-                        //
-                        //     render_pass(&secondary_camera, color_view, depth_view);
-                        // }
+                        // TODO: trash again
+                        {
+                            match *world_view.borrow_mut() {
+                                UITabKind::WorldView(ref mut view) => {
+                                    println!("RENDER");
+                                    view.render_to(render_pass);
+                                }
+                                _ => {}
+                            }
+                        }
 
                         // Render ImGUI
                         {
@@ -392,8 +393,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 );
 
                             added_nodes.drain(..).for_each(|node| {
-                                dock_state
-                                    .set_focused_node_and_surface((node.surface, node.node));
+                                dock_state.set_focused_node_and_surface((node.surface, node.node));
                                 dock_state.push_to_focused_leaf(UITab {
                                     kind: node.kind,
                                     surface: node.surface,
@@ -401,7 +401,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 });
                                 counter += 1;
                             });
-
 
                             // egui::SidePanel::left("options_panel").show(
                             //     egui_renderer.context(),
@@ -481,27 +480,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                             //             "   Yaw {}",
                             //             secondary_camera.view.yaw_pitch.y
                             //         ));
-                            //     });
-
-                            // egui::Window::new("Renderer Example")
-                            //     .default_size([512.0, 512.0])
-                            //     .resizable(true)
-                            //     .hscroll(true)
-                            //     .vscroll(true)
-                            //     .show(egui_renderer.context(), |ui| {
-                            //         ui.image(ImageSource::Texture(SizedTexture::new(
-                            //             secondary_rt_texture_id,
-                            //             [
-                            //                 (window_size.width as f32) / 6.0,
-                            //                 (window_size.height as f32) / 6.0,
-                            //             ],
-                            //         )));
-                            //         gizmo_example.draw_gizmo(
-                            //             ui,
-                            //             &secondary_camera,
-                            //             (window_size.width as f32) / 6.0,
-                            //             (window_size.height as f32) / 6.0,
-                            //         );
                             //     });
 
                             // egui::Window::new("Chunk Manager")

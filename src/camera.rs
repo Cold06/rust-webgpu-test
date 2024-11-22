@@ -61,6 +61,8 @@ pub struct Camera {
     pub matrix: Mat4,
     pub view: ViewMatrix,
     pub projection: ProjectionMatrix,
+    pub width: f32,
+    pub height: f32,
 }
 
 impl Camera {
@@ -73,11 +75,26 @@ impl Camera {
             matrix: Mat4::IDENTITY,
             view: ViewMatrix::new(position, yaw_pitch),
             projection: ProjectionMatrix::new(width, height, std::f32::consts::PI / 4.0 , 0.1, 10000.0),
+            width,
+            height,
         };
 
         camera.compute();
 
         camera
+    }
+
+    pub fn check_resize<F: FnOnce()>(&mut self, new_width: f32, new_height: f32, cb: F) {
+        if self.width != new_width || self.height != new_height {
+            self.width = new_width;
+            self.height = new_height;
+
+            self.resize(self.width, self.height);
+
+            self.compute();
+
+            cb();
+        }
     }
 
     pub fn compute(&mut self) {

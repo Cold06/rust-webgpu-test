@@ -2,6 +2,7 @@ use bytemuck::NoUninit;
 use egui_wgpu::wgpu;
 use crate::gpu::GPUCtx;
 
+#[derive(Debug)]
 pub struct GPUTexture {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
