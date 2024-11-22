@@ -2,16 +2,15 @@ mod world_view;
 mod regular_view;
 mod fancy_view;
 
-use std::cell::RefCell;
-use std::rc::Rc;
 use egui_dock::{NodeIndex, SurfaceIndex};
-use crate::egui_tools::EguiRenderer;
+use enum_dispatch::enum_dispatch;
 use crate::frontend::fancy_view::FancyView;
 use crate::frontend::regular_view::RegularView;
 
 pub use world_view::{WorldView};
 use crate::shared::Shared;
 
+#[enum_dispatch(UITabKind)]
 pub trait TabView {
     fn title(&self, tab: &UITab) -> String;
 
@@ -19,15 +18,15 @@ pub trait TabView {
 
 }
 
+#[enum_dispatch]
 pub enum UITabKind {
-    Regular(RegularView),
-    Fancy(FancyView),
-    WorldView(WorldView),
-    Custom(Box<dyn FnMut(&mut egui::Ui)>),
+    RegularView,
+    FancyView,
+    Test(Shared<WorldView>),
 }
 
 pub struct UITab {
-    pub kind: Shared<UITabKind>,
+    pub kind: UITabKind,
     pub surface: SurfaceIndex,
     pub node: NodeIndex,
 }
@@ -35,7 +34,7 @@ pub struct UITab {
 impl UITab {
     pub fn regular(surface: SurfaceIndex, node: NodeIndex) -> Self {
         Self {
-            kind: Shared::new(UITabKind::Regular(RegularView{})),
+            kind: RegularView{}.into(),
             surface,
             node,
         }
@@ -43,72 +42,39 @@ impl UITab {
 
     pub fn fancy(surface: SurfaceIndex, node: NodeIndex) -> Self {
         Self {
-            kind: Shared::new(UITabKind::Fancy(FancyView{})),
+            kind: FancyView{}.into(),
             surface,
             node,
         }
     }
 
-    pub fn custom(surface: SurfaceIndex, node: NodeIndex, fn_once: Box<dyn FnMut(&mut egui::Ui)>) -> Self {
-        Self {
-            kind: Shared::new(UITabKind::Custom(fn_once)),
-            surface,
-            node,
-        }
-    }
+    // pub fn custom(surface: SurfaceIndex, node: NodeIndex, fn_once: Box<dyn FnMut(&mut egui::Ui)>) -> Self {
+    //     Self {
+    //         kind: Shared::new(UITabKind::Custom(fn_once)),
+    //         surface,
+    //         node,
+    //     }
+    // }
 
-    pub fn world_view(surface: SurfaceIndex, node: NodeIndex, kind: Shared<UITabKind>) -> Self {
+    pub fn world_view(surface: SurfaceIndex, node: NodeIndex, kind: Shared<WorldView>) -> Self {
         Self {
-            kind,
+            kind: UITabKind::Test(kind),
             surface,
             node,
         }
     }
 
     pub fn title(&self) -> String {
-        match *self.kind.borrow_mut() {
-            UITabKind::Regular(ref view) => view.title(&self),
-            UITabKind::Fancy(ref view) => view.title(&self),
-            UITabKind::WorldView(ref view) => view.title(&self),
-            UITabKind::Custom(_) => format!("Custom Tab {}", self.node.0),
-        }
+        format!("{} - {}", self.kind.title(self), self.node.0)
     }
 
     pub fn content(&mut self, ui: &mut egui::Ui) {
-        match *self.kind.borrow_mut() {
-            UITabKind::Regular(ref mut view) => {
-                view.content(ui);
-            }
-            UITabKind::Fancy(ref mut view) => {
-                view.content(ui);
-            }
-            UITabKind::WorldView(ref mut view) => {
-                view.content(ui);
-            },
-            UITabKind::Custom(ref mut fn_once) => {
-                fn_once(ui);
-            }
-        };
+        self.kind.content(ui);
     }
 }
 
 pub struct TabViewer<'a> {
     pub added_nodes: &'a mut Vec<UITab>,
-}
-
-impl TabViewer<'_> {
-    // TODO: since the design is based arround Rc<RefCell<T>>
-    // we dont need to delegate it to the tab viewer
-    pub fn on_egui(&mut self, egui_renderer: &mut EguiRenderer) {
-        for node in self.added_nodes.iter_mut() {
-            match *node.kind.borrow_mut() {
-                UITabKind::WorldView(ref mut view) => {
-                    view.on_egui(egui_renderer);
-                },
-                _ => {},
-            }
-        }
-    }
 }
 
 impl egui_dock::TabViewer for TabViewer<'_> {

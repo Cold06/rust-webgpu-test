@@ -2192,6 +2192,7 @@ dependencies = [
  "egui-winit",
  "egui_dock",
  "egui_extras",
+ "enum_dispatch",
  "env_logger",
  "ffmpeg-next",
  "glam",

@@ -17,9 +17,9 @@ mod js;
 mod multimath;
 mod paint_utils;
 mod pipelines;
+mod shared;
 mod video;
 mod window;
-mod shared;
 
 use crate::camera::Camera;
 use crate::camera_controller::CameraController;
@@ -30,10 +30,9 @@ use crate::egui_tools::EguiRenderer;
 use crate::frontend::{TabViewer, UITab, UITabKind};
 use crate::gpu::{GPUCtx, GPUTexture, SView, ViewTarget};
 use crate::js::VM;
+use crate::shared::Shared;
 use crate::video::{start, FrameData, PipelineEvent};
 use bytemuck::{Pod, Zeroable};
-use egui::load::SizedTexture;
-use egui::{ImageSource, Margin};
 use egui_dock::{DockArea, DockState, NodeIndex, Style, SurfaceIndex};
 use egui_wgpu::wgpu::FilterMode;
 use egui_wgpu::{wgpu, ScreenDescriptor};
@@ -49,7 +48,6 @@ use winit::{
     keyboard::{Key, NamedKey},
     window::CursorGrabMode,
 };
-use crate::shared::Shared;
 
 #[repr(C)]
 #[derive(Pod, Copy, Clone, Zeroable)]
@@ -162,19 +160,18 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // TODO: The API is trash
     // The Tabs Should Be Rc<RefCell> by default
-    let world_view = Shared::new(
-        frontend::WorldView::new(&ctx, &mut egui_renderer).into(),
-    );
+
+    let world_view = frontend::WorldView::new(&ctx, &mut egui_renderer);
 
     let mut dock_state = DockState::new(vec![
         UITab::world_view(SurfaceIndex::main(), NodeIndex(1), world_view.clone()),
-        UITab::custom(
-            SurfaceIndex::main(),
-            NodeIndex(2),
-            Box::new(|ui| {
-                ui.label(format!("I'am JONH ULTRAKILL!!! {}", 0));
-            }),
-        ),
+        UITab::fancy(SurfaceIndex::main(), NodeIndex(2)), // UITab::custom(
+                                                          //     SurfaceIndex::main(),
+                                                          //     NodeIndex(2),
+                                                          //     Box::new(|ui| {
+                                                          //         ui.label(format!("I'am JONH ULTRAKILL!!! {}", 0));
+                                                          //     }),
+                                                          // ),
     ]);
 
     {
@@ -204,14 +201,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         if use_secondary_camera {
             world_view.with(|view| {
-                match view {
-                    UITabKind::WorldView(ref mut view) => {
-                        process_camera_input(focused, event.clone(), &mut view.secondary_camera_controller);
-                    }
-                    _ => {}
-                }
+                process_camera_input(
+                    focused,
+                    event.clone(),
+                    &mut view.secondary_camera_controller,
+                );
             });
-
         } else {
             process_camera_input(focused, event.clone(), &mut camera_controller);
         }
@@ -276,16 +271,14 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                         // TODO: This is also TRASH we should not
                         // need to match against the enum
-                        {
-                            match *world_view.borrow_mut() {
-                                UITabKind::WorldView(ref mut view) => {
-                                    let transform = view.get_transform(delta);
 
-                                    video_demo.update_location(&ctx, transform);
-                                }
-                                _ => {}
-                            }
-                        }
+
+
+                        world_view.with(|view| {
+                            let transform = view.get_transform(delta);
+
+                            video_demo.update_location(&ctx, transform);
+                        });
 
                         // Get Surface Texture
                         let frame = match os_window.surface.get_current_texture() {
@@ -323,12 +316,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         // TODO: trash again
 
                         world_view.with(|view| {
-                            match view {
-                                UITabKind::WorldView(ref mut view) => {
-                                    view.on_egui(&mut egui_renderer);
-                                }
-                                _ => {}
-                            }
+                            view.on_egui(&mut egui_renderer);
                         });
 
                         // This will be used for both main render pass and egui render pass
@@ -365,16 +353,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                         // Render Second Pass
                         // TODO: trash again
 
-
-                            world_view.with(|view| {
-                                match view {
-                                    UITabKind::WorldView(ref mut view) => {
-                                        view.render_to(render_pass);
-                                    }
-                                    _ => {}
-                                }
-                            });
-
+                        world_view.with(|view| {
+                            view.render_to(&mut render_pass);
+                        });
 
                         // Render ImGUI
                         {

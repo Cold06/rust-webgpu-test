@@ -16,6 +16,12 @@ impl<A> Clone for Shared<A> {
     }
 }
 
+impl<T> From<T> for Shared<T> {
+    fn from(value: T) -> Shared<T> {
+        Shared::new(value)
+    }
+}
+
 impl<T> Shared<T> {
     pub fn new(value: T) -> Shared<T> {
         let value = RefCell::new(value);
@@ -35,7 +41,7 @@ impl<T> Shared<T> {
         u(self.borrow_mut())
     }
 
-    pub fn with<F: FnOnce(&mut T)>(&self, u: F) {
+    pub fn with<R, F: FnOnce(&mut T) -> R>(&self, u: F) -> R {
         u(&mut *self.borrow_mut())
     }
 }

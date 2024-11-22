@@ -1,7 +1,7 @@
 use crate::camera::Camera;
 use crate::camera_controller::CameraController;
 use crate::egui_tools::EguiRenderer;
-use crate::frontend::{TabView, UITab, UITabKind};
+use crate::frontend::{TabView, UITab};
 use crate::gizmo_example::GizmoExample;
 use crate::gpu::{GPUCtx, GPUTexture, ViewTarget};
 use bytemuck::{Pod, Zeroable};
@@ -11,6 +11,7 @@ use egui_wgpu::wgpu;
 use egui_wgpu::wgpu::{FilterMode, TextureView};
 use glam::{Mat4, Vec2, Vec3};
 use std::time::Duration;
+use crate::shared::Shared;
 
 pub struct WorldView {
     pub gizmo_example: GizmoExample,
@@ -36,7 +37,7 @@ impl WorldView {
         self.gizmo_example.transform
     }
 
-    pub fn new(ctx: &GPUCtx, egui_renderer: &mut EguiRenderer) -> Self {
+    pub fn new(ctx: &GPUCtx, egui_renderer: &mut EguiRenderer) -> Shared<Self> {
         let view_width = 700.0;
         let view_height = 400.0;
         let mut secondary_camera = Camera::new(
@@ -79,10 +80,10 @@ impl WorldView {
             secondary_camera_controller,
             ctx: ctx.clone(),
             needs_texture_update: false,
-        }
+        }.into()
     }
 
-    pub fn render_to<F: FnMut(&Camera, &TextureView, &TextureView)>(&self, mut render_pass: F) {
+    pub fn render_to<F: FnMut(&Camera, &TextureView, &TextureView)>(&self, render_pass: &mut F) {
         let color_view = &self.secondary_rt_gpu_texture.view;
         let depth_view = &self
             .secondary_render_target_depth
@@ -104,19 +105,13 @@ impl WorldView {
     }
 }
 
-impl Into<UITabKind> for WorldView {
-    fn into(self) -> UITabKind {
-        UITabKind::WorldView(self)
-    }
-}
-
-impl TabView for WorldView {
+impl TabView for Shared<WorldView> {
     fn title(&self, tab: &UITab) -> String {
         format!("View")
     }
 
     fn content(&mut self, ui: &mut Ui) {
-        {
+        self.with(|view| {
             let rect = ui.response().interact_rect;
 
             if rect != Rect::NOTHING {
@@ -124,35 +119,35 @@ impl TabView for WorldView {
                 let h = rect.height();
 
                 ui.image(ImageSource::Texture(SizedTexture::new(
-                    self.secondary_rt_texture_id,
+                    view.secondary_rt_texture_id,
                     [w, h],
                 )));
 
-                self.gizmo_example.draw_gizmo(
+                view.gizmo_example.draw_gizmo(
                     ui,
-                    &self.secondary_camera,
+                    &view.secondary_camera,
                     w,
                     h,
                 );
 
-                self.secondary_camera.check_resize(w, h, || {
+                view.secondary_camera.check_resize(w, h, || {
                     if w as u32 == 0 || h as u32 == 0 {
                         return;
                     }
 
-                    self.secondary_rt_gpu_texture.resize(
-                        &self.ctx,
+                    view.secondary_rt_gpu_texture.resize(
+                        &view.ctx,
                         w as u32,
                         h as u32,
                         Filler0(0, 0, 0, 255),
                     );
 
-                    self.secondary_render_target_depth
-                        .resize(&self.ctx, w as u32, h as u32);
+                    view.secondary_render_target_depth
+                        .resize(&view.ctx, w as u32, h as u32);
 
-                    self.needs_texture_update = true;
+                    view.needs_texture_update = true;
                 });
             }
-        }
+        });
     }
 }
