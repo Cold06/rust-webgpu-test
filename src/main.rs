@@ -19,6 +19,7 @@ mod paint_utils;
 mod pipelines;
 mod video;
 mod window;
+mod shared;
 
 use crate::camera::Camera;
 use crate::camera_controller::CameraController;
@@ -48,6 +49,7 @@ use winit::{
     keyboard::{Key, NamedKey},
     window::CursorGrabMode,
 };
+use crate::shared::Shared;
 
 #[repr(C)]
 #[derive(Pod, Copy, Clone, Zeroable)]
@@ -160,9 +162,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // TODO: The API is trash
     // The Tabs Should Be Rc<RefCell> by default
-    let world_view = Rc::new(RefCell::new(
+    let world_view = Shared::new(
         frontend::WorldView::new(&ctx, &mut egui_renderer).into(),
-    ));
+    );
 
     let mut dock_state = DockState::new(vec![
         UITab::world_view(SurfaceIndex::main(), NodeIndex(1), world_view.clone()),
@@ -200,11 +202,19 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         // TODO: focus management to know which view should process the inputs
 
-        // if use_secondary_camera {
-        //     process_camera_input(focused, event.clone(), &mut secondary_camera_controller);
-        // } else {
-        //     process_camera_input(focused, event.clone(), &mut camera_controller);
-        // }
+        if use_secondary_camera {
+            world_view.with(|view| {
+                match view {
+                    UITabKind::WorldView(ref mut view) => {
+                        process_camera_input(focused, event.clone(), &mut view.secondary_camera_controller);
+                    }
+                    _ => {}
+                }
+            });
+
+        } else {
+            process_camera_input(focused, event.clone(), &mut camera_controller);
+        }
 
         match event {
             Event::AboutToWait => {
@@ -311,14 +321,15 @@ fn main() -> Result<(), Box<dyn Error>> {
                         frame_count += 1;
 
                         // TODO: trash again
-                        {
-                            match *world_view.borrow_mut() {
+
+                        world_view.with(|view| {
+                            match view {
                                 UITabKind::WorldView(ref mut view) => {
                                     view.on_egui(&mut egui_renderer);
                                 }
                                 _ => {}
                             }
-                        }
+                        });
 
                         // This will be used for both main render pass and egui render pass
                         let frame_view = &frame.texture.create_view(&Default::default());
@@ -353,15 +364,17 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                         // Render Second Pass
                         // TODO: trash again
-                        {
-                            match *world_view.borrow_mut() {
-                                UITabKind::WorldView(ref mut view) => {
-                                    println!("RENDER");
-                                    view.render_to(render_pass);
+
+
+                            world_view.with(|view| {
+                                match view {
+                                    UITabKind::WorldView(ref mut view) => {
+                                        view.render_to(render_pass);
+                                    }
+                                    _ => {}
                                 }
-                                _ => {}
-                            }
-                        }
+                            });
+
 
                         // Render ImGUI
                         {

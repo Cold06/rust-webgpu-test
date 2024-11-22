@@ -10,6 +10,7 @@ use crate::frontend::fancy_view::FancyView;
 use crate::frontend::regular_view::RegularView;
 
 pub use world_view::{WorldView};
+use crate::shared::Shared;
 
 pub trait TabView {
     fn title(&self, tab: &UITab) -> String;
@@ -26,7 +27,7 @@ pub enum UITabKind {
 }
 
 pub struct UITab {
-    pub kind: Rc<RefCell<UITabKind>>,
+    pub kind: Shared<UITabKind>,
     pub surface: SurfaceIndex,
     pub node: NodeIndex,
 }
@@ -34,7 +35,7 @@ pub struct UITab {
 impl UITab {
     pub fn regular(surface: SurfaceIndex, node: NodeIndex) -> Self {
         Self {
-            kind: Rc::new(RefCell::new(UITabKind::Regular(RegularView{}))),
+            kind: Shared::new(UITabKind::Regular(RegularView{})),
             surface,
             node,
         }
@@ -42,7 +43,7 @@ impl UITab {
 
     pub fn fancy(surface: SurfaceIndex, node: NodeIndex) -> Self {
         Self {
-            kind: Rc::new(RefCell::new(UITabKind::Fancy(FancyView{}))),
+            kind: Shared::new(UITabKind::Fancy(FancyView{})),
             surface,
             node,
         }
@@ -50,13 +51,13 @@ impl UITab {
 
     pub fn custom(surface: SurfaceIndex, node: NodeIndex, fn_once: Box<dyn FnMut(&mut egui::Ui)>) -> Self {
         Self {
-            kind: Rc::new(RefCell::new(UITabKind::Custom(fn_once))),
+            kind: Shared::new(UITabKind::Custom(fn_once)),
             surface,
             node,
         }
     }
 
-    pub fn world_view(surface: SurfaceIndex, node: NodeIndex, kind: Rc<RefCell<UITabKind>>) -> Self {
+    pub fn world_view(surface: SurfaceIndex, node: NodeIndex, kind: Shared<UITabKind>) -> Self {
         Self {
             kind,
             surface,
