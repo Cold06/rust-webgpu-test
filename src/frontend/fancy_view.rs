@@ -1,5 +1,4 @@
 use egui::{Color32, RichText, Ui};
-use crate::egui_tools::EguiRenderer;
 use crate::frontend::{TabView, UITab};
 
 pub struct FancyView {}

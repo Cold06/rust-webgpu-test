@@ -165,24 +165,18 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut dock_state = DockState::new(vec![
         UITab::world_view(SurfaceIndex::main(), NodeIndex(1), world_view.clone()),
-        UITab::fancy(SurfaceIndex::main(), NodeIndex(2)), // UITab::custom(
-                                                          //     SurfaceIndex::main(),
-                                                          //     NodeIndex(2),
-                                                          //     Box::new(|ui| {
-                                                          //         ui.label(format!("I'am JONH ULTRAKILL!!! {}", 0));
-                                                          //     }),
-                                                          // ),
+        UITab::fancy(SurfaceIndex::main(), NodeIndex(2)),
     ]);
 
     {
         let [a, b] = dock_state.main_surface_mut().split_left(
             NodeIndex::root(),
-            0.3,
+            0.5,
             vec![UITab::fancy(SurfaceIndex::main(), NodeIndex(3))],
         );
         let [_, _] = dock_state.main_surface_mut().split_below(
             a,
-            0.7,
+            0.5,
             vec![UITab::fancy(SurfaceIndex::main(), NodeIndex(4))],
         );
         let [_, _] = dock_state.main_surface_mut().split_below(
