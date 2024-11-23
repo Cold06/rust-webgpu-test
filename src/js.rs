@@ -1,16 +1,11 @@
 use crate::canvas::Canvas;
 use rquickjs::{CatchResultExt, Context, Function, Object, Runtime, Value};
-use skia_safe::wrapper::NativeTransmutableWrapper;
 use std::cell::RefCell;
 use std::rc::Rc;
 
 pub struct VM {
     runtime: Runtime,
     ctx: Context,
-}
-
-fn print(s: String) {
-    println!("{s}");
 }
 
 impl VM {

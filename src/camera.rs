@@ -1,4 +1,4 @@
-use crate::multimath::{as_sphere_coord, to_rad};
+use crate::multimath::as_sphere_coord;
 use glam::*;
 
 pub struct ProjectionMatrix {

@@ -27,10 +27,9 @@ use crate::camera_utils::process_camera_input;
 use crate::canvas::{render_svg, Canvas};
 use crate::demos::{ChunksDemo, VideoDemo};
 use crate::egui_tools::EguiRenderer;
-use crate::frontend::{HandleList, TabHandle, TabInstance};
+use crate::frontend::{HandleList, TabHandle};
 use crate::gpu::{GPUCtx, GPUTexture, SView, ViewTarget};
 use crate::js::VM;
-use crate::shared::Shared;
 use crate::video::{start, FrameData, PipelineEvent};
 use bytemuck::{Pod, Zeroable};
 use egui_dock::{DockArea, DockState, NodeIndex, Style, SurfaceIndex};
@@ -42,7 +41,7 @@ use std::cell::RefCell;
 use std::error::Error;
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use winit::{
     event::{ElementState, Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -53,10 +52,6 @@ use winit::{
 #[repr(C)]
 #[derive(Pod, Copy, Clone, Zeroable)]
 struct Filler0(u8, u8, u8, u8);
-
-fn print(s: String) {
-    println!("{s}");
-}
 
 fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();

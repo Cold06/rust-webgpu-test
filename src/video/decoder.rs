@@ -1,13 +1,7 @@
 use crossbeam_channel::{Receiver, Sender};
 use ffmpeg_next::{codec, format, frame, media};
-use mp4::Mp4Reader;
-use std::io::{Read, Seek, SeekFrom};
-use std::os::unix::fs::MetadataExt;
-use std::path::{Path, PathBuf};
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
 use std::time::Duration;
-use tracing::{debug, error, span, trace, warn};
+use tracing::{debug, error, warn};
 
 use crate::video::reader::{EncodedChunk, PipelineEvent};
 
@@ -23,11 +17,6 @@ pub struct Resolution {
     pub width: usize,
     pub height: usize,
 }
-
-pub const MAX_NODE_RESOLUTION: Resolution = Resolution {
-    width: 7682,
-    height: 4320,
-};
 
 #[derive(Clone, Debug)]
 pub struct YuvPlanes {
@@ -52,9 +41,6 @@ pub struct Frame {
 pub enum InputInitError {
     #[error(transparent)]
     FfmpegError(#[from] ffmpeg_next::Error),
-
-    #[error("Couldn't read decoder init result.")]
-    CannotReadInitResult,
 }
 
 fn chunk_to_av(chunk: EncodedChunk) -> ffmpeg_next::Packet {

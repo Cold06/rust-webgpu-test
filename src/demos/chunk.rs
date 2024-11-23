@@ -9,7 +9,6 @@ pub struct ChunksDemo {
     chunks: Vec<Chunk>,
     bind_group: quad_mesh::BindGroup0,
     pipeline: quad_mesh::Pipeline,
-    pub last_spawn_x: i32,
 }
 
 impl ChunksDemo {
@@ -21,7 +20,6 @@ impl ChunksDemo {
         let pipeline = quad_mesh::Pipeline::create(ctx, config.format);
 
         ChunksDemo {
-            last_spawn_x: 1,
             chunks: vec![],
             bind_group,
             pipeline,

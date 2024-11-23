@@ -1,6 +1,6 @@
 use crate::camera::Camera;
 use crate::gpu::{GPUCtx, GPUSampler, GPUTexture};
-use crate::multimath::{Mat4Bytes, Vec4Bytes};
+use crate::multimath::Mat4Bytes;
 use bytemuck::{NoUninit, Pod, Zeroable};
 use egui_wgpu::wgpu;
 use glam::*;
@@ -262,7 +262,8 @@ impl BindGroup1 {
     }
 
     pub fn update_transform(&self, ctx: &GPUCtx, transform: Mat4) {
-        ctx.queue.write_buffer(&self.buffer, 0, Mat4Bytes(transform).as_bytes());
+        ctx.queue
+            .write_buffer(&self.buffer, 0, Mat4Bytes(transform).as_bytes());
     }
 
     pub fn create(ctx: &GPUCtx, transform: Mat4) -> Self {
@@ -283,7 +284,10 @@ impl BindGroup1 {
             }],
         });
 
-        Self { bind_group, buffer: position_buffer }
+        Self {
+            bind_group,
+            buffer: position_buffer,
+        }
     }
 }
 

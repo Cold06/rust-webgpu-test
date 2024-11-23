@@ -28,7 +28,7 @@ impl GPUCtx {
         });
 
         let size = LogicalSize::new(1920, 1080);
-        let mut window = OSWindow::new(&event_loop, &instance, size);
+        let window = OSWindow::new(&event_loop, &instance, size);
 
         let adapter = block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
