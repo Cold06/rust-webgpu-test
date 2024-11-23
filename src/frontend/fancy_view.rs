@@ -26,4 +26,8 @@ impl TabView for Shared<FancyView> {
                 .color(Color32::from_rgb(255, 128, 64)),
         );
     }
+
+    fn as_tab_handle(&self, surface: egui_dock::SurfaceIndex, node: egui_dock::NodeIndex) -> TabHandle {
+        TabHandle::new(self.clone().into(), surface, node)
+    }
 }

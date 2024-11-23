@@ -5,9 +5,9 @@ mod fancy_view;
 use egui_dock::{NodeIndex, SurfaceIndex};
 use enum_dispatch::enum_dispatch;
 
-pub use world_view::{WorldView};
-pub use fancy_view::{FancyView};
-pub use regular_view::{RegularView};
+pub use world_view::WorldView;
+pub use fancy_view::FancyView;
+pub use regular_view::RegularView;
 
 use crate::shared::Shared;
 
@@ -17,6 +17,7 @@ pub trait TabView {
 
     fn content(&mut self, ui: &mut egui::Ui);
 
+    fn as_tab_handle(&self, surface: SurfaceIndex, node: NodeIndex) -> TabHandle;
 }
 
 #[enum_dispatch]
@@ -68,12 +69,12 @@ impl egui_dock::TabViewer for HandleList<'_> {
 
         if ui.button("Regular tab").clicked() {
             let tab = RegularView::new();
-            self.0.push(TabHandle::new(tab.into(), surface, node));
+            self.0.push(tab.as_tab_handle(surface, node));
         }
 
         if ui.button("Fancy tab").clicked() {
             let tab = FancyView::new();
-            self.0.push(TabHandle::new(tab.into(), surface, node));
+            self.0.push(tab.as_tab_handle(surface, node));
         }
     }
 }

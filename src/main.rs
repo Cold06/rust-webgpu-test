@@ -36,6 +36,7 @@ use bytemuck::{Pod, Zeroable};
 use egui_dock::{DockArea, DockState, NodeIndex, Style, SurfaceIndex};
 use egui_wgpu::wgpu::FilterMode;
 use egui_wgpu::{wgpu, ScreenDescriptor};
+use frontend::TabView;
 use glam::*;
 use std::cell::RefCell;
 use std::error::Error;
@@ -169,25 +170,25 @@ fn main() -> Result<(), Box<dyn Error>> {
     let tab4 = frontend::RegularView::new();
 
     let mut dock_state = DockState::new(vec![
-        TabHandle::new(tab1.into(), SurfaceIndex::main(), NodeIndex(1)),
-        TabHandle::new(world_view.clone().into(), SurfaceIndex::main(), NodeIndex(2)),
+        tab1.as_tab_handle(SurfaceIndex::main(), NodeIndex(1)),
+        world_view.as_tab_handle(SurfaceIndex::main(), NodeIndex(2)),
     ]);
 
     {
         let [a, b] = dock_state.main_surface_mut().split_left(
             NodeIndex::root(),
             0.5,
-            vec![TabHandle::new(tab2.into(), SurfaceIndex::main(), NodeIndex(3))],
+            vec![tab2.as_tab_handle(SurfaceIndex::main(), NodeIndex(3))],
         );
         let [_, _] = dock_state.main_surface_mut().split_below(
             a,
             0.5,
-            vec![TabHandle::new(tab3.into(), SurfaceIndex::main(), NodeIndex(4))],
+            vec![tab3.as_tab_handle(SurfaceIndex::main(), NodeIndex(4))],
         );
         let [_, _] = dock_state.main_surface_mut().split_below(
             b,
             0.5,
-            vec![TabHandle::new(tab4.into(), SurfaceIndex::main(), NodeIndex(5))],
+            vec![tab4.as_tab_handle(SurfaceIndex::main(), NodeIndex(5))],
         );
     }
 

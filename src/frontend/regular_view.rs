@@ -1,7 +1,5 @@
 use egui::{RichText, Ui};
-use crate::egui_tools::EguiRenderer;
 use crate::frontend::{TabView, TabHandle};
-use crate::frontend::fancy_view::FancyView;
 use crate::shared::Shared;
 
 pub struct RegularView {}
@@ -22,5 +20,9 @@ impl TabView for Shared<RegularView> {
             "Content of {}. This tab is ho-hum.",
             ""
         )));
+    }
+
+    fn as_tab_handle(&self, surface: egui_dock::SurfaceIndex, node: egui_dock::NodeIndex) -> TabHandle {
+        TabHandle::new(self.clone().into(), surface, node)
     }
 }

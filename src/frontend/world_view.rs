@@ -40,7 +40,7 @@ impl WorldView {
     pub fn new(ctx: &GPUCtx, egui_renderer: &mut EguiRenderer) -> Shared<Self> {
         let view_width = 700.0;
         let view_height = 400.0;
-        let mut secondary_camera = Camera::new(
+        let secondary_camera = Camera::new(
             Vec3::new(-50.0, 0.0, 0.0),
             Vec2::ZERO,
             view_width,
@@ -49,10 +49,10 @@ impl WorldView {
         let mut secondary_camera_controller = CameraController::new(200.0, 0.004);
         secondary_camera_controller.copy_camera_rotation(&secondary_camera);
 
-        let mut secondary_render_target_depth =
+        let secondary_render_target_depth =
             ViewTarget::create(&ctx, view_width as u32, view_height as u32);
 
-        let mut secondary_rt_gpu_texture = GPUTexture::create(
+        let secondary_rt_gpu_texture = GPUTexture::create(
             &ctx,
             view_width as u32,
             view_height as u32,
@@ -69,7 +69,7 @@ impl WorldView {
             FilterMode::Linear,
         );
 
-        let mut gizmo_example = GizmoExample::new();
+        let gizmo_example = GizmoExample::new();
 
         Self {
             gizmo_example,
@@ -106,7 +106,7 @@ impl WorldView {
 }
 
 impl TabView for Shared<WorldView> {
-    fn title(&self, tab: &TabHandle) -> String {
+    fn title(&self, _: &TabHandle) -> String {
         format!("View")
     }
 
@@ -149,5 +149,9 @@ impl TabView for Shared<WorldView> {
                 });
             }
         });
+    }
+
+    fn as_tab_handle(&self, surface: egui_dock::SurfaceIndex, node: egui_dock::NodeIndex) -> TabHandle {
+        TabHandle::new(self.clone().into(), surface, node)
     }
 }
