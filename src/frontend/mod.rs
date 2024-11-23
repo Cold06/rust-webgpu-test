@@ -4,66 +4,42 @@ mod fancy_view;
 
 use egui_dock::{NodeIndex, SurfaceIndex};
 use enum_dispatch::enum_dispatch;
-use crate::frontend::fancy_view::FancyView;
-use crate::frontend::regular_view::RegularView;
 
 pub use world_view::{WorldView};
+pub use fancy_view::{FancyView};
+pub use regular_view::{RegularView};
+
 use crate::shared::Shared;
 
-#[enum_dispatch(UITabKind)]
+#[enum_dispatch(TabInstance)]
 pub trait TabView {
-    fn title(&self, tab: &UITab) -> String;
+    fn title(&self, tab: &TabHandle) -> String;
 
     fn content(&mut self, ui: &mut egui::Ui);
 
 }
 
 #[enum_dispatch]
-pub enum UITabKind {
-    RegularView,
-    FancyView,
-    Test(Shared<WorldView>),
+pub enum TabInstance {
+    RegularView(Shared<RegularView>),
+    FancyView(Shared<FancyView>),
+    WorldView(Shared<WorldView>),
 }
 
-pub struct UITab {
-    pub kind: UITabKind,
+pub struct TabHandle {
+    pub kind: TabInstance,
     pub surface: SurfaceIndex,
     pub node: NodeIndex,
 }
 
-impl UITab {
-    pub fn regular(surface: SurfaceIndex, node: NodeIndex) -> Self {
+impl TabHandle {
+    pub fn new(kind: TabInstance, surface: SurfaceIndex, node: NodeIndex) -> Self {
         Self {
-            kind: RegularView{}.into(),
+            kind,
             surface,
             node,
         }
     }
-
-    pub fn fancy(surface: SurfaceIndex, node: NodeIndex) -> Self {
-        Self {
-            kind: FancyView{}.into(),
-            surface,
-            node,
-        }
-    }
-
-    // pub fn custom(surface: SurfaceIndex, node: NodeIndex, fn_once: Box<dyn FnMut(&mut egui::Ui)>) -> Self {
-    //     Self {
-    //         kind: Shared::new(UITabKind::Custom(fn_once)),
-    //         surface,
-    //         node,
-    //     }
-    // }
-
-    pub fn world_view(surface: SurfaceIndex, node: NodeIndex, kind: Shared<WorldView>) -> Self {
-        Self {
-            kind: UITabKind::Test(kind),
-            surface,
-            node,
-        }
-    }
-
     pub fn title(&self) -> String {
         format!("{} - {}", self.kind.title(self), self.node.0)
     }
@@ -73,12 +49,10 @@ impl UITab {
     }
 }
 
-pub struct TabViewer<'a> {
-    pub added_nodes: &'a mut Vec<UITab>,
-}
+pub struct HandleList<'a>(pub &'a mut Vec<TabHandle>);
 
-impl egui_dock::TabViewer for TabViewer<'_> {
-    type Tab = UITab;
+impl egui_dock::TabViewer for HandleList<'_> {
+    type Tab = TabHandle;
 
     fn title(&mut self, tab: &mut Self::Tab) -> egui::WidgetText {
         tab.title().into()
@@ -93,11 +67,13 @@ impl egui_dock::TabViewer for TabViewer<'_> {
         ui.style_mut().visuals.button_frame = false;
 
         if ui.button("Regular tab").clicked() {
-            self.added_nodes.push(UITab::regular(surface, node));
+            let tab = RegularView::new();
+            self.0.push(TabHandle::new(tab.into(), surface, node));
         }
 
         if ui.button("Fancy tab").clicked() {
-            self.added_nodes.push(UITab::fancy(surface, node));
+            let tab = FancyView::new();
+            self.0.push(TabHandle::new(tab.into(), surface, node));
         }
     }
 }

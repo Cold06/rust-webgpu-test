@@ -1,11 +1,19 @@
 use egui::{RichText, Ui};
 use crate::egui_tools::EguiRenderer;
-use crate::frontend::{TabView, UITab};
+use crate::frontend::{TabView, TabHandle};
+use crate::frontend::fancy_view::FancyView;
+use crate::shared::Shared;
 
 pub struct RegularView {}
 
-impl TabView for RegularView {
-    fn title(&self, tab: &UITab) -> String {
+impl RegularView {
+    pub fn new() -> Shared<Self> {
+        Self {}.into()
+    }
+}
+
+impl TabView for Shared<RegularView> {
+    fn title(&self, tab: &TabHandle) -> String {
         format!("Regular Tab {}", tab.node.0)
     }
 

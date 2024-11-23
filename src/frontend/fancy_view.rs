@@ -1,10 +1,17 @@
 use egui::{Color32, RichText, Ui};
-use crate::frontend::{TabView, UITab};
+use crate::frontend::{TabView, TabHandle};
+use crate::shared::Shared;
 
 pub struct FancyView {}
 
-impl TabView for FancyView {
-    fn title(&self, tab: &UITab) -> String {
+impl FancyView {
+    pub fn new() -> Shared<Self> {
+        Self {}.into()
+    }
+}
+
+impl TabView for Shared<FancyView> {
+    fn title(&self, tab: &TabHandle) -> String {
         format!("Fancy Tab {}", tab.node.0)
     }
 

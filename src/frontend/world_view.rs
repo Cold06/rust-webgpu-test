@@ -1,7 +1,7 @@
 use crate::camera::Camera;
 use crate::camera_controller::CameraController;
 use crate::egui_tools::EguiRenderer;
-use crate::frontend::{TabView, UITab};
+use crate::frontend::{TabView, TabHandle};
 use crate::gizmo_example::GizmoExample;
 use crate::gpu::{GPUCtx, GPUTexture, ViewTarget};
 use bytemuck::{Pod, Zeroable};
@@ -106,7 +106,7 @@ impl WorldView {
 }
 
 impl TabView for Shared<WorldView> {
-    fn title(&self, tab: &UITab) -> String {
+    fn title(&self, tab: &TabHandle) -> String {
         format!("View")
     }
 

@@ -27,7 +27,7 @@ use crate::camera_utils::process_camera_input;
 use crate::canvas::{render_svg, Canvas};
 use crate::demos::{ChunksDemo, VideoDemo};
 use crate::egui_tools::EguiRenderer;
-use crate::frontend::{TabViewer, UITab, UITabKind};
+use crate::frontend::{HandleList, TabHandle, TabInstance};
 use crate::gpu::{GPUCtx, GPUTexture, SView, ViewTarget};
 use crate::js::VM;
 use crate::shared::Shared;
@@ -163,26 +163,31 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let world_view = frontend::WorldView::new(&ctx, &mut egui_renderer);
 
+    let tab1 = frontend::FancyView::new();
+    let tab2 = frontend::FancyView::new();
+    let tab3 = frontend::RegularView::new();
+    let tab4 = frontend::RegularView::new();
+
     let mut dock_state = DockState::new(vec![
-        UITab::world_view(SurfaceIndex::main(), NodeIndex(1), world_view.clone()),
-        UITab::fancy(SurfaceIndex::main(), NodeIndex(2)),
+        TabHandle::new(tab1.into(), SurfaceIndex::main(), NodeIndex(1)),
+        TabHandle::new(world_view.clone().into(), SurfaceIndex::main(), NodeIndex(2)),
     ]);
 
     {
         let [a, b] = dock_state.main_surface_mut().split_left(
             NodeIndex::root(),
             0.5,
-            vec![UITab::fancy(SurfaceIndex::main(), NodeIndex(3))],
+            vec![TabHandle::new(tab2.into(), SurfaceIndex::main(), NodeIndex(3))],
         );
         let [_, _] = dock_state.main_surface_mut().split_below(
             a,
             0.5,
-            vec![UITab::fancy(SurfaceIndex::main(), NodeIndex(4))],
+            vec![TabHandle::new(tab3.into(), SurfaceIndex::main(), NodeIndex(4))],
         );
         let [_, _] = dock_state.main_surface_mut().split_below(
             b,
             0.5,
-            vec![UITab::regular(SurfaceIndex::main(), NodeIndex(5))],
+            vec![TabHandle::new(tab4.into(), SurfaceIndex::main(), NodeIndex(5))],
         );
     }
 
@@ -375,14 +380,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 .style(Style::from_egui(egui_renderer.context().style().as_ref()))
                                 .show(
                                     egui_renderer.context(),
-                                    &mut TabViewer {
-                                        added_nodes: &mut added_nodes,
-                                    },
+                                    &mut HandleList(&mut added_nodes),
                                 );
 
                             added_nodes.drain(..).for_each(|node| {
                                 dock_state.set_focused_node_and_surface((node.surface, node.node));
-                                dock_state.push_to_focused_leaf(UITab {
+                                dock_state.push_to_focused_leaf(TabHandle {
                                     kind: node.kind,
                                     surface: node.surface,
                                     node: NodeIndex(counter),
