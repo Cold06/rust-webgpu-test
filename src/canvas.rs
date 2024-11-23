@@ -5,17 +5,25 @@ use skia_safe::paint::{Cap, Join, Style};
 use skia_safe::{surfaces, AlphaType, Color, Color4f, ColorType, Data, EncodedImageFormat, FontMgr, ImageInfo, Paint, PaintStyle, Path, Rect, Surface, M44};
 
 pub struct Canvas {
+    #[allow(unused)]
     width: u32,
+    #[allow(unused)]
     height: u32,
     surface: Surface,
     path: Path,
     paint: Paint,
 
+    #[allow(unused)]
     fill_style: Paint,
+    #[allow(unused)]
     stroke_style: Paint,
+    #[allow(unused)]
     line_width: f64,
+    #[allow(unused)]
     line_cap: Cap,
+    #[allow(unused)]
     line_join: Join,
+    #[allow(unused)]
     miter_limit: f64,
 }
 
@@ -60,32 +68,38 @@ impl Canvas {
         }
     }
 
+    #[allow(unused)]
     #[inline]
     pub fn save(&mut self) {
         self.canvas().save();
     }
 
+    #[allow(unused)]
     #[inline]
     pub fn translate(&mut self, dx: f32, dy: f32) {
         self.canvas().translate((dx, dy));
     }
 
+    #[allow(unused)]
     #[inline]
     pub fn scale(&mut self, sx: f32, sy: f32) {
         self.canvas().scale((sx, sy));
     }
 
+    #[allow(unused)]
     #[inline]
     pub fn move_to(&mut self, x: f32, y: f32) {
         self.begin_path();
         self.path.move_to((x, y));
     }
 
+    #[allow(unused)]
     #[inline]
     pub fn line_to(&mut self, x: f32, y: f32) {
         self.path.line_to((x, y));
     }
 
+    #[allow(unused)]
     #[inline]
     pub fn quad_to(&mut self, cpx: f32, cpy: f32, x: f32, y: f32) {
         self.path.quad_to((cpx, cpy), (x, y));
@@ -110,6 +124,7 @@ impl Canvas {
         let _ = mem::replace(&mut self.path, new_path);
     }
 
+    #[allow(unused)]
     #[inline]
     pub fn stroke(&mut self) {
         self.paint.set_style(PaintStyle::Stroke);
@@ -121,6 +136,7 @@ impl Canvas {
         self.paint.set_color(color);
     }
 
+    #[allow(unused)]
     #[inline]
     pub fn set_color(&mut self, color: Color4f) {
         self.paint.set_color(color.to_color());
@@ -154,10 +170,12 @@ impl Canvas {
         );
     }
 
+    #[allow(unused)]
     pub fn clear(&mut self) {
         self.surface.canvas().clear(Color::WHITE);
     }
 
+    #[allow(unused)]
     #[inline]
     pub fn fill(&mut self) {
         self.paint.set_style(PaintStyle::Fill);
@@ -194,6 +212,7 @@ impl Canvas {
     // stroke
     // restore
 
+    #[allow(unused)]
     pub fn js_set_fill_style(&mut self, rgb_color: String) {
         let parsed: skribble_color::Color = rgb_color.parse().unwrap();
         let rgb_v = parsed.into_rgb();
@@ -209,11 +228,13 @@ impl Canvas {
         self.fill_style.set_color(color.to_color());
     }
 
+    #[allow(unused)]
     pub fn js_set_line_width(&mut self, line_width: f64) {
         self.line_width = line_width;
         self.stroke_style.set_stroke_width(line_width as f32);
     }
 
+    #[allow(unused)]
     pub fn js_set_stroke_style(&mut self, stroke_style: String) {
         let parsed: skribble_color::Color = stroke_style.parse().unwrap();
         let rgb_v = parsed.into_rgb();
@@ -229,6 +250,7 @@ impl Canvas {
         self.stroke_style.set_color(color.to_color());
     }
 
+    #[allow(unused)]
     pub fn js_set_line_cap(&mut self, line_cap: String) {
         match line_cap.as_str() {
             "butt" => {
@@ -249,6 +271,7 @@ impl Canvas {
         }
     }
 
+    #[allow(unused)]
     pub fn js_set_line_join(&mut self, line_join: String) {
         match line_join.as_str() {
             "miter" => {
@@ -269,37 +292,45 @@ impl Canvas {
         }
     }
 
+    #[allow(unused)]
     pub fn js_set_miter_limit(&mut self, miter_limit: f64) {
         self.miter_limit = miter_limit;
         self.stroke_style.set_stroke_miter(miter_limit as f32);
     }
 
+    #[allow(unused)]
     pub fn js_call_save(&mut self) {
         self.surface.canvas().save();
     }
 
+    #[allow(unused)]
     pub fn js_call_scale(&mut self, x: f64, y: f64) {
         self.surface.canvas().scale((x as f32, y as f32));
     }
 
+    #[allow(unused)]
     pub fn js_call_begin_path(&mut self) {
         drop(mem::replace(&mut self.path, Path::new()));
     }
 
+    #[allow(unused)]
     pub fn js_call_rect(&mut self, x: f64, y: f64, width: f64, height: f64) {
         self.path.add_rect(Rect::new(x as f32, y as f32, (x as f32) + (width as f32), (y as f32) + (height as f32)), None);
         self.path.close();
     }
 
+    #[allow(unused)]
     pub fn js_call_fill(&mut self) {
         self.fill_style.set_style(PaintStyle::Fill);
         self.surface.canvas().draw_path(&self.path, &self.fill_style);
     }
 
+    #[allow(unused)]
     pub fn js_call_move_to(&mut self, x: f64, y: f64) {
         self.path.move_to((x as f32, y as f32));
     }
 
+    #[allow(unused)]
     pub fn js_call_arc(&mut self, x: f64, y: f64, radius: f64, start_angle: f64, end_angle: f64, counterclockwise: bool) {
         let r = radius as f32;
 
@@ -315,20 +346,24 @@ impl Canvas {
         );
     }
 
+    #[allow(unused)]
     pub fn js_call_line_to(&mut self, x: f64, y: f64) {
         self.path.line_to((x as f32, y as f32));
     }
 
+    #[allow(unused)]
     pub fn js_call_bezier_curve_to(&mut self, p1x: f64, p1y: f64, p2x: f64, p2y: f64, px: f64, py: f64) {
         self.bezier_curve_to(
             p1x as f32, p1y as f32, p2x as f32, p2y as f32, px as f32, py as f32,
         );
     }
 
+    #[allow(unused)]
     pub fn js_call_close_path(&mut self) {
         self.close_path();
     }
 
+    #[allow(unused)]
     pub fn js_call_transform(&mut self, a: f64, b: f64, c: f64, d: f64, e: f64, f: f64) {
         let x = M44::new(
             a as f32, c as f32, e as f32, 0.0,
@@ -339,11 +374,13 @@ impl Canvas {
         self.canvas().set_matrix(&x);
     }
 
+    #[allow(unused)]
     pub fn js_call_stroke(&mut self) {
         self.stroke_style.set_style(PaintStyle::Stroke);
         self.surface.canvas().draw_path(&self.path, &self.stroke_style);
     }
 
+    #[allow(unused)]
     pub fn js_call_restore(&mut self) {
         self.canvas().restore();
     }

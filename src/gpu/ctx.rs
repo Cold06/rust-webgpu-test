@@ -50,6 +50,7 @@ impl GPUCtx {
         (ctx, window)
     }
 
+    #[allow(unused)]
     pub(crate) fn force_sync(&self) {
         self.queue.submit([]);
     }

@@ -1,11 +1,14 @@
 use bytemuck::{Pod, Zeroable};
 use glam::*;
-use std::fmt::{Debug, Formatter, Result};
+use std::fmt::Debug;
 
+#[allow(unused)]
 pub const PI: f32 = std::f32::consts::PI;
 
+#[allow(unused)]
 pub const DEG_2_RAD: f32 = PI / 180.0;
 
+#[allow(unused)]
 pub fn to_rad(deg: f32) -> f32 {
     deg * DEG_2_RAD
 }
@@ -21,47 +24,51 @@ pub fn as_sphere_coord(v: Vec2) -> Vec3 {
     }
 }
 
-
+#[allow(unused)]
 #[derive(Debug, Clone, Copy)]
 pub struct Mat4Bytes(pub Mat4);
 unsafe impl Zeroable for Mat4Bytes {}
 unsafe impl Pod for Mat4Bytes {}
 
-impl <'a> Mat4Bytes {
+impl<'a> Mat4Bytes {
     pub fn as_bytes(&'a self) -> &'a [u8] {
         bytemuck::bytes_of(self)
     }
 }
 
+#[allow(unused)]
 #[derive(Debug, Clone, Copy)]
 pub struct Vec4Bytes(pub Vec4);
 unsafe impl Zeroable for Vec4Bytes {}
 unsafe impl Pod for Vec4Bytes {}
 
-impl <'a> Vec4Bytes {
+impl<'a> Vec4Bytes {
     pub fn as_bytes(&'a self) -> &'a [u8] {
         bytemuck::bytes_of(self)
     }
 }
 
+#[allow(unused)]
 #[derive(Debug, Clone, Copy)]
 pub struct Vec3Bytes(pub Vec3);
 unsafe impl Zeroable for Vec3Bytes {}
 unsafe impl Pod for Vec3Bytes {}
 
-impl <'a> Vec3Bytes {
+impl<'a> Vec3Bytes {
+    #[allow(unused)]
     pub fn as_bytes(&'a self) -> &'a [u8] {
         bytemuck::bytes_of(self)
     }
 }
 
-
+#[allow(unused)]
 #[derive(Debug, Clone, Copy)]
 pub struct Vec2Bytes(pub Vec2);
 unsafe impl Zeroable for Vec2Bytes {}
 unsafe impl Pod for Vec2Bytes {}
 
-impl <'a> Vec2Bytes {
+impl<'a> Vec2Bytes {
+    #[allow(unused)]
     pub fn as_bytes(&'a self) -> &'a [u8] {
         bytemuck::bytes_of(self)
     }

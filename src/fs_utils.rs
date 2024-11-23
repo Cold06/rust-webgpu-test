@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
+#[allow(unused)]
 pub fn get_random_file_from_directory(dir_path: &str) -> Option<PathBuf> {
     // Read the directory entries
     let entries = fs::read_dir(dir_path).ok()?;

@@ -1,7 +1,6 @@
 use std::{
-    cell::{
-        Ref, RefCell, RefMut
-    }, rc::{Rc, Weak}
+    cell::{Ref, RefCell, RefMut},
+    rc::{Rc, Weak},
 };
 
 pub struct Shared<T>(Rc<RefCell<T>>);
@@ -32,6 +31,7 @@ impl<T> Shared<T> {
         Rc::downgrade(&self.0)
     }
 
+    #[allow(unused)]
     pub fn borrow(&self) -> Ref<T> {
         self.0.borrow()
     }
@@ -40,6 +40,7 @@ impl<T> Shared<T> {
         self.0.borrow_mut()
     }
 
+    #[allow(unused)]
     pub fn update(&self, u: fn(RefMut<T>)) {
         u(self.borrow_mut())
     }

@@ -40,10 +40,8 @@ use egui_wgpu::{wgpu, ScreenDescriptor};
 use frontend::{TabView, WorldView};
 use glam::*;
 use shared::{Shared, WeakShared};
-use std::cell::RefCell;
 use std::error::Error;
 use std::path::PathBuf;
-use std::rc::Rc;
 use std::time::{Duration, Instant};
 use video::MP4Command;
 use winit::{
@@ -107,12 +105,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     );
 
     // Init Examples
-    let mut chunks_demo = Shared::new(ChunksDemo::create(&os_window.surface_configuration, &ctx));
+    let chunks_demo = Shared::new(ChunksDemo::create(&os_window.surface_configuration, &ctx));
     let mut video_demo = VideoDemo::create(&ctx, &os_window.surface_configuration);
 
     // Init canvas
     let canvas_size = [1000.0 * high_dpi_factor, 1000.0 * high_dpi_factor];
-    let mut skia_canvas = Shared::new(Canvas::new(
+    let skia_canvas = Shared::new(Canvas::new(
         canvas_size[0] as u32,
         canvas_size[1] as u32,
         high_dpi_factor,
@@ -125,7 +123,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         render_svg(code, &mut skia_canvas.borrow_mut());
     }
 
-    let mut canvas_data = skia_canvas.borrow_mut().as_bytes()?;
+    let canvas_data = skia_canvas.borrow_mut().as_bytes()?;
     let skia_gpu_texture = Shared::new(GPUTexture::create(
         &ctx,
         canvas_size[0] as u32,
@@ -164,9 +162,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut last_frame = Instant::now();
     let mut use_secondary_camera = false;
 
-    let mut language = String::from("js");
-    let mut code = String::from(include_str!("../js/outline.js"));
-
     let mut frame_count = 0;
 
     // TODO: The API is trash
@@ -186,7 +181,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut camera_view = frontend::QuickView::new();
     let mut chunk_manager_view = frontend::QuickView::new();
     let mut video_view = frontend::QuickView::new();
-    let mut code_editor_view = frontend::QuickView::new();
+    let code_editor_view = frontend::CodeView::new();
 
     let mut dock_state = DockState::new(vec![
         canvas_example_view.as_tab_handle(SurfaceIndex::main(), NodeIndex(1)),
@@ -354,8 +349,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                                         u.render_static(&mut pass);
                                     });
 
-                                    
-
                                     video_demo.setup_dynamic_camera(&ctx, &camera);
                                     video_demo.render_static(&mut pass);
                                 }
@@ -507,88 +500,24 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                             video_view.ui(move |ui: &mut egui::Ui| {
                                 if ui.button("Pause").clicked() {
-                                    value.try_send(MP4Command::Pause);
+                                    let _ = value.try_send(MP4Command::Pause);
                                 }
                                 if ui.button("Play").clicked() {
-                                    value.try_send(MP4Command::Play);
+                                    let _ = value.try_send(MP4Command::Play);
                                 }
                                 if ui.button("Stop").clicked() {
-                                    value.try_send(MP4Command::Stop);
+                                    let _ = value.try_send(MP4Command::Stop);
                                 }
                                 if ui.button("SkipForward").clicked() {
-                                    value.try_send(MP4Command::SkipForward);
+                                    let _ = value.try_send(MP4Command::SkipForward);
                                 }
                                 if ui.button("SkipBackward").clicked() {
-                                    value.try_send(MP4Command::SkipBackward);
+                                    let _ = value.try_send(MP4Command::SkipBackward);
                                 }
                                 if ui.button("Seek(Duration)").clicked() {
-                                    value
-                                        .try_send(MP4Command::Seek(Duration::from_millis(0)));
+                                    let _ =
+                                        value.try_send(MP4Command::Seek(Duration::from_millis(0)));
                                 }
-                            });
-
-
-                            let mut l = language.clone();
-                            let inner = skia_canvas.clone();
-                            let inner_text = skia_gpu_texture.clone();
-                            let mut inner_c = code.clone();
-                            let inner_ctx = ctx.clone();
-
-                            let inner_vm = vm.clone();
-
-                            code_editor_view.ui(move |ui: &mut egui::Ui| {
-                                let mut theme =
-                                    egui_extras::syntax_highlighting::CodeTheme::from_memory(
-                                        ui.ctx(),
-                                        ui.style(),
-                                    );
-
-                                ui.collapsing("Theme", |ui| {
-                                    ui.group(|ui| {
-                                        theme.ui(ui);
-                                        theme.clone().store_in_memory(ui.ctx());
-                                    });
-                                });
-
-                                let mut layouter =
-                                    |ui: &egui::Ui, string: &str, wrap_width: f32| {
-                                        let mut layout_job =
-                                            egui_extras::syntax_highlighting::highlight(
-                                                ui.ctx(),
-                                                ui.style(),
-                                                &theme,
-                                                string,
-                                                &mut l,
-                                            );
-                                        layout_job.wrap.max_width = wrap_width;
-                                        ui.fonts(|f| f.layout_job(layout_job))
-                                    };
-
-                                if ui.button("Eval").clicked() {
-                                    {
-                                        inner.with(|u| u.clear());
-                                    }
-
-                                    inner_vm.with(|u| u.eval_with_canvas(inner_c.clone(), inner.clone()));
-
-                                    let new_texture_sync = inner.with(|u| u.as_bytes().unwrap());
-
-                                    inner_text.with(|u| {
-                                        u.update(&inner_ctx, &new_texture_sync);
-                                    });
-                                }
-
-                                egui::ScrollArea::vertical().show(ui, |ui| {
-                                    ui.add(
-                                        egui::TextEdit::multiline(&mut inner_c)
-                                            .font(egui::TextStyle::Monospace) // for cursor height
-                                            .code_editor()
-                                            .desired_rows(10)
-                                            .lock_focus(true)
-                                            .desired_width(f32::INFINITY)
-                                            .layouter(&mut layouter),
-                                    );
-                                });
                             });
 
                             egui_renderer.end_frame_and_draw(

@@ -35,10 +35,15 @@ struct TrackInfo<SampleUnpacker: FnMut(mp4::Mp4Sample) -> Bytes> {
     timescale: u32,
     track_id: u32,
     sample_unpacker: SampleUnpacker,
+    #[allow(unused)]
     frame_rate: f64,
+    #[allow(unused)]
     bitrate: u32,
+    #[allow(unused)]
     height: u16,
+    #[allow(unused)]
     width: u16,
+    #[allow(unused)]
     default_sample_duration: u32,
     duration: Duration,
 }
@@ -134,13 +139,12 @@ pub enum Mp4Error {
 
     #[error("Mp4 reader error.")]
     Mp4ReaderError(#[from] mp4::Error),
-
-    #[error("No suitable track in the mp4 file")]
-    NoTrack,
 }
 
 pub struct Mp4FileReader {
+    #[allow(unused)]
     stop_thread: Arc<AtomicBool>,
+    #[allow(unused)]
     fragment_sender: Option<Sender<PipelineEvent<Bytes>>>,
 }
 
@@ -153,7 +157,9 @@ pub struct EncodedChunk {
 type ChunkReceiver = Receiver<PipelineEvent<EncodedChunk>>;
 
 struct VideoCursor {
+    #[allow(unused)]
     video_duration: Duration,
+    #[allow(unused)]
     avg_sample_duration: Duration,
     sample_count: u32,
     current_sample: u32,
@@ -284,16 +290,20 @@ impl VideoCursor {
         None
     }
 
+    #[allow(unused)]
     pub fn seek(to: Duration) {
         // Update current sample and
         // return it while to > 0 && to < duration
         // get the sample_id from duration, even if a little incorrect
     }
 
+    #[allow(unused)]
     pub fn skip_forward(seconds: u32) {
         // update current sample to
         // += number of samples in a second * seconds
     }
+
+    #[allow(unused)]
     pub fn skip_backward(seconds: u32) {
         // update current sample to
         // -= number of samples in a second * seconds
@@ -328,6 +338,7 @@ fn run_reader_thread<Reader: Read + Seek>(
                     let rendering_offset = sample.rendering_offset;
                     let start_time = sample.start_time;
 
+                    #[allow(unused)]
                     let sample_duration = Duration::from_secs_f64(
                         sample.duration as f64 / track_info.timescale as f64,
                     );

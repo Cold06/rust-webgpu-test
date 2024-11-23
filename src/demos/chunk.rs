@@ -41,6 +41,7 @@ impl ChunksDemo {
         self.bind_group.update_globals(ctx, camera);
     }
 
+    #[allow(unused)]
     pub fn render<'a>(&'a mut self, pass: &mut wgpu::RenderPass<'a>) {
         for chunk in &self.chunks {
             pass.set_pipeline(&self.pipeline.pipeline);

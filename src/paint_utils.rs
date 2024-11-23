@@ -1,6 +1,7 @@
-use skia_safe::{Color};
+use skia_safe::Color;
 use crate::canvas::Canvas;
 
+#[allow(unused)]
 fn map_range(value: f64) -> f64 {
     (value + 1.0) / 2.0
 }

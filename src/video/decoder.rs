@@ -34,6 +34,7 @@ pub enum FrameData {
 pub struct Frame {
     pub data: FrameData,
     pub resolution: Resolution,
+    #[allow(unused)]
     pub pts: Duration,
 }
 

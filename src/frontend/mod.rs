@@ -3,6 +3,7 @@ mod fancy_view;
 mod quick_view;
 mod regular_view;
 mod world_view;
+mod code_view;
 
 pub use custom_view::CustomView;
 use egui_dock::{NodeIndex, SurfaceIndex};
@@ -11,6 +12,7 @@ pub use fancy_view::FancyView;
 pub use quick_view::QuickView;
 pub use regular_view::RegularView;
 pub use world_view::WorldView;
+pub use code_view::CodeView;
 
 use crate::{egui_tools::EguiRenderer, gpu::GPUCtx, shared::{Shared, WeakShared}};
 
@@ -30,6 +32,7 @@ pub enum TabInstance {
     WorldView(Shared<WorldView>),
     CustomView(Shared<CustomView>),
     QuickView(Shared<QuickView>),
+    CodeView(Shared<CodeView>),
 }
 
 /// Doesn't cover all tabs because not all tab types

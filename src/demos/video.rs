@@ -84,6 +84,7 @@ impl VideoDemo {
         self.bind_group_0.update_globals(ctx, camera);
     }
 
+    #[allow(unused)]
     pub fn render<'a>(&'a mut self, pass: &mut wgpu::RenderPass<'a>) {
         pass.set_pipeline(&self.pipeline.pipeline);
         pass.set_bind_group(0, &self.bind_group_0.bind_group, &[]);

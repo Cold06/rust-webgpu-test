@@ -3,7 +3,9 @@ use crate::shared::Shared;
 use rquickjs::{CatchResultExt, Context, Function, Object, Runtime, Value};
 
 pub struct VM {
+    #[allow(unused)]
     runtime: Runtime,
+    #[allow(unused)]
     ctx: Context,
 }
 
@@ -46,6 +48,8 @@ globalThis.console = {
         }
     }
 
+    #[allow(unused)]
+
     pub fn eval_with_canvas(&mut self, code: String, canvas: Shared<Canvas>) {
         self.ctx
             .with(|ctx| -> Result<(), ()> {
@@ -70,9 +74,6 @@ globalThis.console = {
                 let canvas_16 = canvas.clone();
                 let canvas_17 = canvas.clone();
                 let canvas_18 = canvas.clone();
-
-
-
 
                 global
                     .set(
@@ -286,16 +287,29 @@ globalThis.console = {
                 global
                     .set(
                         "__js_call_arc",
-                        Function::new(ctx.clone(), move |x: f64, y: f64, radius: f64, start_angle: f64, end_angle: f64, counterclockwise: bool| {
-                            canvas_18.borrow_mut().js_call_arc(x, y, radius, start_angle, end_angle, counterclockwise);
-                        })
-                            .unwrap()
-                            .with_name("__js_call_arc")
-                            .unwrap(),
+                        Function::new(
+                            ctx.clone(),
+                            move |x: f64,
+                                  y: f64,
+                                  radius: f64,
+                                  start_angle: f64,
+                                  end_angle: f64,
+                                  counterclockwise: bool| {
+                                canvas_18.borrow_mut().js_call_arc(
+                                    x,
+                                    y,
+                                    radius,
+                                    start_angle,
+                                    end_angle,
+                                    counterclockwise,
+                                );
+                            },
+                        )
+                        .unwrap()
+                        .with_name("__js_call_arc")
+                        .unwrap(),
                     )
                     .unwrap();
-
-
 
                 ctx.eval::<(), _>(
                     r#"
@@ -325,7 +339,6 @@ globalThis.ctx = {
                 )
                 .unwrap();
 
-
                 {
                     canvas.borrow_mut().save();
                 }
@@ -345,6 +358,8 @@ globalThis.ctx = {
             })
             .unwrap();
     }
+
+    #[allow(unused)]
 
     pub fn eval(&self, script: &str) {
         self.ctx.with(|ctx| {

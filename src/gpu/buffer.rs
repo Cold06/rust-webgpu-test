@@ -3,11 +3,13 @@ use bytemuck::{NoUninit, Pod};
 use egui_wgpu::wgpu;
 use egui_wgpu::wgpu::util::DeviceExt;
 
+#[allow(unused)]
 pub struct GPUBuffer {
     buffer: wgpu::Buffer,
     usage: wgpu::BufferUsages,
 }
 
+#[allow(unused)]
 #[derive(Clone, Copy, Debug)]
 pub enum BufferType {
     Vertex,
@@ -17,6 +19,7 @@ pub enum BufferType {
     StorageRW,
 }
 
+#[allow(unused)]
 const fn get_visibility(ty: BufferType) -> wgpu::ShaderStages {
     match ty {
         BufferType::Vertex => wgpu::ShaderStages::VERTEX,
@@ -31,6 +34,7 @@ const fn get_visibility(ty: BufferType) -> wgpu::ShaderStages {
     }
 }
 
+#[allow(unused)]
 const fn get_usage(ty: BufferType) -> wgpu::BufferUsages {
     match ty {
         BufferType::Vertex => wgpu::BufferUsages::VERTEX,
@@ -54,6 +58,7 @@ const fn get_usage(ty: BufferType) -> wgpu::BufferUsages {
     }
 }
 
+#[allow(unused)]
 const fn get_binding_type(ty: BufferType) -> wgpu::BufferBindingType {
     match ty {
         BufferType::Vertex => panic!("Error: BufferType::Vertex cannot be used as binding resource (they are used in pipeline instead)"),
@@ -65,6 +70,7 @@ const fn get_binding_type(ty: BufferType) -> wgpu::BufferBindingType {
 }
 
 impl GPUBuffer {
+    #[allow(unused)]
     pub const fn get_layout<T>(binding: u32, ty: BufferType) -> wgpu::BindGroupLayoutEntry {
         wgpu::BindGroupLayoutEntry {
             count: None,
@@ -78,6 +84,7 @@ impl GPUBuffer {
         }
     }
 
+    #[allow(unused)]
     pub fn create_init<T: NoUninit + Pod>(
         ctx: &GPUCtx,
         usage: wgpu::BufferUsages,
@@ -94,6 +101,7 @@ impl GPUBuffer {
         Self { buffer, usage }
     }
 
+    #[allow(unused)]
     pub fn update<T: NoUninit + Pod>(&self, ctx: &GPUCtx, data: &T) {
         ctx.queue
             .write_buffer(&self.buffer, 0, bytemuck::bytes_of(data));

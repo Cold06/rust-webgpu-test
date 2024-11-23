@@ -2,7 +2,7 @@ use bitflags::bitflags;
 use noise::{NoiseFn, Perlin};
 use crate::pipelines::quad_mesh;
 
-struct GenModel {
+pub struct GenModel {
     pub vertex_data: Vec<quad_mesh::Vertex>,
     pub index_data: Vec<u32>,
     pub top_stack: u32,

@@ -37,10 +37,10 @@ impl GizmoExample {
         let snapping = ui.input(|input| input.modifiers.ctrl);
 
         let v32 = camera.view.matrix;
-        let mut v64: mint::RowMatrix4<f64> = dmat4_from_mat4(v32).into();
+        let v64: mint::RowMatrix4<f64> = dmat4_from_mat4(v32).into();
 
         let p32 = camera.projection.matrix;
-        let mut p64: mint::RowMatrix4<f64> = dmat4_from_mat4(p32).into();
+        let p64: mint::RowMatrix4<f64> = dmat4_from_mat4(p32).into();
 
         let min = ui.clip_rect().min;
 
@@ -126,6 +126,8 @@ impl GizmoExample {
             ui.label(text);
         }
     }
+
+    #[allow(unused)]
 
     pub fn draw_options(&mut self, ui: &mut egui::Ui) {
         ui.heading("Options");
