@@ -54,4 +54,18 @@ impl ChunksDemo {
             pass.draw_indexed(0..chunk.index_count as u32, 0, 0..1);
         }
     }
+
+    pub fn render_static(&mut self, pass: &mut wgpu::RenderPass<'static>) {
+        for chunk in &self.chunks {
+            pass.set_pipeline(&self.pipeline.pipeline);
+            pass.set_bind_group(0, &self.bind_group.bind_group, &[]);
+            pass.set_bind_group(1, &chunk.bind_group.bind_group, &[]);
+            pass.set_index_buffer(
+                chunk.vertex_format.index_buffer.slice(..),
+                wgpu::IndexFormat::Uint32,
+            );
+            pass.set_vertex_buffer(0, chunk.vertex_format.vertex_buffer.slice(..));
+            pass.draw_indexed(0..chunk.index_count as u32, 0, 0..1);
+        }
+    }
 }

@@ -1,7 +1,6 @@
 use crate::canvas::Canvas;
+use crate::shared::Shared;
 use rquickjs::{CatchResultExt, Context, Function, Object, Runtime, Value};
-use std::cell::RefCell;
-use std::rc::Rc;
 
 pub struct VM {
     runtime: Runtime,
@@ -47,7 +46,7 @@ globalThis.console = {
         }
     }
 
-    pub fn eval_with_canvas(&mut self, code: String, canvas: Rc<RefCell<Canvas>>) {
+    pub fn eval_with_canvas(&mut self, code: String, canvas: Shared<Canvas>) {
         self.ctx
             .with(|ctx| -> Result<(), ()> {
                 let global = ctx.globals();
