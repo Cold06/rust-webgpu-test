@@ -1,10 +1,7 @@
 use std::{
-    rc::Rc,
     cell::{
-        RefCell,
-        Ref,
-        RefMut
-    }
+        Ref, RefCell, RefMut
+    }, rc::{Rc, Weak}
 };
 
 pub struct Shared<T>(Rc<RefCell<T>>);
@@ -22,11 +19,17 @@ impl<T> From<T> for Shared<T> {
     }
 }
 
+pub type WeakShared<T> = Weak<RefCell<T>>;
+
 impl<T> Shared<T> {
     pub fn new(value: T) -> Shared<T> {
         let value = RefCell::new(value);
         let value = Rc::new(value);
         Shared(value)
+    }
+
+    pub fn weak(&self) -> WeakShared<T> {
+        Rc::downgrade(&self.0)
     }
 
     pub fn borrow(&self) -> Ref<T> {

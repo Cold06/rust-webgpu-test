@@ -35,8 +35,9 @@ use bytemuck::{Pod, Zeroable};
 use egui_dock::{DockArea, DockState, NodeIndex, Style, SurfaceIndex};
 use egui_wgpu::wgpu::FilterMode;
 use egui_wgpu::{wgpu, ScreenDescriptor};
-use frontend::TabView;
+use frontend::{TabView, WorldView};
 use glam::*;
+use shared::WeakShared;
 use std::cell::RefCell;
 use std::error::Error;
 use std::path::PathBuf;
@@ -166,7 +167,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     // TODO: The API is trash
     // The Tabs Should Be Rc<RefCell> by default
 
-    let world_view = frontend::WorldView::new(&ctx, &mut egui_renderer);
+    let mut render_passes: Vec<WeakShared<WorldView>> = vec![];
+    let mut egui_passes: Vec<WeakShared<WorldView>> = vec![];
+
+    let world_view1 = frontend::WorldView::new(
+        &ctx,
+        &mut egui_renderer,
+        &mut egui_passes,
+        &mut render_passes,
+    );
 
     let tab1 = frontend::CustomView::new(|ui| {
         ui.label("GL DONT CARE");
@@ -177,7 +186,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut dock_state = DockState::new(vec![
         tab1.as_tab_handle(SurfaceIndex::main(), NodeIndex(1)),
-        world_view.as_tab_handle(SurfaceIndex::main(), NodeIndex(2)),
+        tab4.as_tab_handle(SurfaceIndex::main(), NodeIndex(2)),
     ]);
 
     {
@@ -194,7 +203,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let [_, _] = dock_state.main_surface_mut().split_below(
             b,
             0.5,
-            vec![tab4.as_tab_handle(SurfaceIndex::main(), NodeIndex(5))],
+            vec![world_view1.as_tab_handle(SurfaceIndex::main(), NodeIndex(5))],
         );
     }
 
@@ -206,7 +215,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         // TODO: focus management to know which view should process the inputs
 
         if use_secondary_camera {
-            world_view.with(|view| {
+            world_view1.with(|view| {
                 process_camera_input(
                     focused,
                     event.clone(),
@@ -278,9 +287,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         // TODO: This is also TRASH we should not
                         // need to match against the enum
 
-
-
-                        world_view.with(|view| {
+                        world_view1.with(|view| {
                             let transform = view.get_transform(delta);
 
                             video_demo.update_location(&ctx, transform);
@@ -319,12 +326,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                         }
                         frame_count += 1;
 
-                        // TODO: trash again
-
-                        world_view.with(|view| {
-                            view.on_egui(&mut egui_renderer);
-                        });
-
                         // This will be used for both main render pass and egui render pass
                         let frame_view = &frame.texture.create_view(&Default::default());
 
@@ -335,7 +336,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 let mut encoder =
                                     ctx.device.create_command_encoder(&Default::default());
                                 {
-                                    let mut view = SView::new(color_view, depth_view);
+                                    let view = SView::new(color_view, depth_view);
                                     let mut pass = view.render_pass(&mut encoder);
                                     chunks_demo.setup_dynamic_camera(&ctx, &camera);
                                     video_demo.setup_dynamic_camera(&ctx, &camera);
@@ -346,28 +347,36 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 ctx.queue.submit([encoder.finish()]);
                             };
 
-                        // Render main pass
-                        // {
-                        //     let color_view = frame_view;
-                        //     let depth_view = &main_render_target_depth
-                        //         .depth_stencil
-                        //         .create_view(&Default::default());
-                        //
-                        //     render_pass(&main_camera, color_view, depth_view);
-                        // }
+                        {
+                            for item in &egui_passes {
+                                if let Some(rc) = item.upgrade() {
+                                    rc.borrow_mut().on_egui(&mut egui_renderer);
+                                }
+                            }
+                            egui_passes.retain(|weak| weak.upgrade().is_some());
+                        }
 
-                        // Render Second Pass
-                        // TODO: trash again
+                        {
+                            for item in &render_passes {
+                                if let Some(rc) = item.upgrade() {
+                                    rc.borrow_mut().render_to(&mut render_pass);
+                                }
+                            }
+                            render_passes.retain(|weak| weak.upgrade().is_some());
+                        }
+
+                        let v = dock_state.focused_leaf();
 
                         quick_tab.ui(move |ui| {
                             ui.label(format!("FPS: {}", fps(delta)));
+
+                            if let Some((a, b)) = v {
+                                ui.label(format!("Focused surface {} on node {}", a.0, b.0));
+                            } else {
+                                ui.label(format!("No focused tab"));
+                            }
                         });
 
-                        world_view.with(|view| {
-                            view.render_to(&mut render_pass);
-                        });
-
-                        // Render ImGUI
                         {
                             let mut encoder =
                                 ctx.device.create_command_encoder(&Default::default());
@@ -385,14 +394,20 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                             let mut added_nodes = Vec::new();
 
+                            let mut handle_list = HandleList::new(&mut added_nodes);
+
                             DockArea::new(&mut dock_state)
                                 .show_add_buttons(true)
                                 .show_add_popup(true)
                                 .style(Style::from_egui(egui_renderer.context().style().as_ref()))
-                                .show(
-                                    egui_renderer.context(),
-                                    &mut HandleList(&mut added_nodes),
-                                );
+                                .show(egui_renderer.context(), &mut handle_list);
+
+                            handle_list.build_tabs(
+                                &ctx,
+                                &mut egui_renderer,
+                                &mut egui_passes,
+                                &mut render_passes,
+                            );
 
                             added_nodes.drain(..).for_each(|node| {
                                 dock_state.set_focused_node_and_surface((node.surface, node.node));
@@ -403,13 +418,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 });
                                 counter += 1;
                             });
-
-                            // egui::SidePanel::left("options_panel").show(
-                            //     egui_renderer.context(),
-                            //     |ui| {
-                            //         gizmo_example.draw_options(ui);
-                            //     },
-                            // );
 
                             // egui::Window::new("Canvas Example")
                             //     .default_size([512.0, 612.0])

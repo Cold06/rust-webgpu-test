@@ -11,7 +11,7 @@ use egui_wgpu::wgpu;
 use egui_wgpu::wgpu::{FilterMode, TextureView};
 use glam::{Mat4, Vec2, Vec3};
 use std::time::Duration;
-use crate::shared::Shared;
+use crate::shared::{Shared, WeakShared};
 
 pub struct WorldView {
     pub gizmo_example: GizmoExample,
@@ -37,7 +37,7 @@ impl WorldView {
         self.gizmo_example.transform
     }
 
-    pub fn new(ctx: &GPUCtx, egui_renderer: &mut EguiRenderer) -> Shared<Self> {
+    pub fn new(ctx: &GPUCtx, egui_renderer: &mut EguiRenderer, render_passes: &mut Vec<WeakShared<WorldView>>, egui_passes: &mut Vec<WeakShared<WorldView>>) -> Shared<Self> {
         let view_width = 700.0;
         let view_height = 400.0;
         let secondary_camera = Camera::new(
@@ -71,7 +71,7 @@ impl WorldView {
 
         let gizmo_example = GizmoExample::new();
 
-        Self {
+        let data: Shared<Self> = Self {
             gizmo_example,
             secondary_render_target_depth,
             secondary_rt_texture_id,
@@ -80,7 +80,12 @@ impl WorldView {
             secondary_camera_controller,
             ctx: ctx.clone(),
             needs_texture_update: false,
-        }.into()
+        }.into();
+
+        render_passes.push(data.weak());
+        egui_passes.push(data.weak());
+
+        data
     }
 
     pub fn render_to<F: FnMut(&Camera, &TextureView, &TextureView)>(&self, render_pass: &mut F) {
