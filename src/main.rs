@@ -41,7 +41,7 @@ use std::cell::RefCell;
 use std::error::Error;
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use winit::{
     event::{ElementState, Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -52,6 +52,15 @@ use winit::{
 #[repr(C)]
 #[derive(Pod, Copy, Clone, Zeroable)]
 struct Filler0(u8, u8, u8, u8);
+
+fn fps(frame_duration: Duration) -> f64 {
+    let seconds = frame_duration.as_secs_f64();
+    if seconds > 0.0 {
+        1.0 / seconds
+    } else {
+        f64::INFINITY
+    }
+}
 
 fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
@@ -159,8 +168,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let world_view = frontend::WorldView::new(&ctx, &mut egui_renderer);
 
-    let tab1 = frontend::FancyView::new();
-    let tab2 = frontend::FancyView::new();
+    let tab1 = frontend::CustomView::new(|ui| {
+        ui.label("GL DONT CARE");
+    });
+    let mut quick_tab = frontend::QuickView::new();
     let tab3 = frontend::RegularView::new();
     let tab4 = frontend::RegularView::new();
 
@@ -173,7 +184,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let [a, b] = dock_state.main_surface_mut().split_left(
             NodeIndex::root(),
             0.5,
-            vec![tab2.as_tab_handle(SurfaceIndex::main(), NodeIndex(3))],
+            vec![quick_tab.as_tab_handle(SurfaceIndex::main(), NodeIndex(3))],
         );
         let [_, _] = dock_state.main_surface_mut().split_below(
             a,
@@ -347,6 +358,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                         // Render Second Pass
                         // TODO: trash again
+
+                        quick_tab.ui(move |ui| {
+                            ui.label(format!("FPS: {}", fps(delta)));
+                        });
 
                         world_view.with(|view| {
                             view.render_to(&mut render_pass);

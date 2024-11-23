@@ -1,13 +1,16 @@
-mod world_view;
-mod regular_view;
+mod custom_view;
 mod fancy_view;
+mod regular_view;
+mod world_view;
+mod quick_view;
 
+pub use custom_view::CustomView;
+pub use quick_view::QuickView;
 use egui_dock::{NodeIndex, SurfaceIndex};
 use enum_dispatch::enum_dispatch;
-
-pub use world_view::WorldView;
 pub use fancy_view::FancyView;
 pub use regular_view::RegularView;
+pub use world_view::WorldView;
 
 use crate::shared::Shared;
 
@@ -25,6 +28,8 @@ pub enum TabInstance {
     RegularView(Shared<RegularView>),
     FancyView(Shared<FancyView>),
     WorldView(Shared<WorldView>),
+    CustomView(Shared<CustomView>),
+    QuickView(Shared<QuickView>),
 }
 
 pub struct TabHandle {
