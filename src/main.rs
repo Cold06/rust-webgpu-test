@@ -78,24 +78,19 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     println!("Now playing: {:?}", video_path);
 
-    // Start playing
     let (video_thread, video_receiver, command_sender) = start(video_path);
 
-    // Create the event loop
     let event_loop = EventLoop::new()?;
 
-    // Init graphics
     let (ctx, mut os_window) = GPUCtx::new(&event_loop);
     let window_size = os_window.window.inner_size();
     let high_dpi_factor = 2.0 * os_window.window.scale_factor() as f32;
 
     os_window.window.set_maximized(true);
 
-    // Create depth textures
     let mut main_render_target_depth =
         ViewTarget::create(&ctx, window_size.width, window_size.height);
 
-    // Create egui
     let mut egui_renderer = EguiRenderer::new(
         &ctx.device,
         os_window.surface_configuration.format,
@@ -104,11 +99,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         &os_window.window,
     );
 
-    // Init Examples
     let chunks_demo = Shared::new(ChunksDemo::create(&os_window.surface_configuration, &ctx));
     let mut video_demo = VideoDemo::create(&ctx, &os_window.surface_configuration);
 
-    // Init canvas
     let canvas_size = [1000.0 * high_dpi_factor, 1000.0 * high_dpi_factor];
     let skia_canvas = Shared::new(Canvas::new(
         canvas_size[0] as u32,
@@ -141,9 +134,6 @@ fn main() -> Result<(), Box<dyn Error>> {
             .register_native_texture(&ctx.device, &t.view, FilterMode::Linear)
     });
 
-    // Secondary view render attachments
-
-    // Main camera
     let mut main_camera = Camera::new(
         Vec3::new(-137.0, 0.0, 0.0),
         Vec2::ZERO,
@@ -153,19 +143,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut camera_controller = CameraController::new(20.0, 0.004);
     camera_controller.copy_camera_rotation(&main_camera);
 
-    // Secondary camera
-
-    // State
     let mut square_dist = 1.0;
     let scale_factor = 1.0;
     let mut focused = false;
     let mut last_frame = Instant::now();
     let mut use_secondary_camera = false;
 
-    let mut frame_count = 0;
-
-    // TODO: The API is trash
-    // The Tabs Should Be Rc<RefCell> by default
 
     let mut render_passes: Vec<WeakShared<WorldView>> = vec![];
     let mut egui_passes: Vec<WeakShared<WorldView>> = vec![];
@@ -178,14 +161,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     );
     let mut stats_view = frontend::QuickView::new();
     let mut canvas_example_view = frontend::QuickView::new();
-    let mut camera_view = frontend::QuickView::new();
     let mut chunk_manager_view = frontend::QuickView::new();
     let mut video_view = frontend::QuickView::new();
     let code_editor_view = frontend::CodeView::new();
 
     let mut dock_state = DockState::new(vec![
-        canvas_example_view.as_tab_handle(SurfaceIndex::main(), NodeIndex(1)),
-        camera_view.as_tab_handle(SurfaceIndex::main(), NodeIndex(2)),
+        canvas_example_view.as_tab_handle(SurfaceIndex::main(), NodeIndex(1))
     ]);
 
     {
@@ -329,9 +310,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 }
                             }
                         }
-                        frame_count += 1;
 
-                        // This will be used for both main render pass and egui render pass
                         let frame_view = &frame.texture.create_view(&Default::default());
 
                         let mut render_pass =
@@ -391,15 +370,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 ctx.device.create_command_encoder(&Default::default());
 
                             egui_renderer.begin_frame(&os_window.window);
-
-                            let screen_descriptor = ScreenDescriptor {
-                                size_in_pixels: [
-                                    os_window.surface_configuration.width,
-                                    os_window.surface_configuration.height,
-                                ],
-                                pixels_per_point: os_window.window.scale_factor() as f32
-                                    * scale_factor,
-                            };
 
                             let mut added_nodes = Vec::new();
 
@@ -466,26 +436,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 }
                             });
 
-                            camera_view.ui(move |ui| {
-                                ui.label(format!(
-                                    "Main Camera {}",
-                                    if !use_secondary_camera {
-                                        "(active)"
-                                    } else {
-                                        ""
-                                    }
-                                ));
-                                ui.label(format!("   X {}", main_camera.view.position.x));
-                                ui.label(format!("   Y {}", main_camera.view.position.y));
-                                ui.label(format!("   Z {}", main_camera.view.position.z));
-                                ui.label(format!("   Pitch {}", main_camera.view.yaw_pitch.x));
-                                ui.label(format!("   Yaw {}", main_camera.view.yaw_pitch.y));
-                                ui.label(format!(
-                                    "Debug Camera {}",
-                                    if use_secondary_camera { "(active)" } else { "" }
-                                ));
-                            });
-
                             let inner_ctx = ctx.clone();
 
                             let inner_c_demo = chunks_demo.clone();
@@ -526,7 +476,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 &mut encoder,
                                 &os_window.window,
                                 &frame_view,
-                                screen_descriptor,
+                                ScreenDescriptor {
+                                    size_in_pixels: [
+                                        os_window.surface_configuration.width,
+                                        os_window.surface_configuration.height,
+                                    ],
+                                    pixels_per_point: os_window.window.scale_factor() as f32
+                                        * scale_factor,
+                                },
                             );
 
                             ctx.queue.submit(Some(encoder.finish()));
