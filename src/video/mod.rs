@@ -1,14 +1,17 @@
 use crossbeam_channel::{Receiver, Sender};
-use decoder::{run_decoder_thread, Frame, InputInitError};
-mod decoder;
+use decoder_thread::{run_decoder_thread, Frame, InputInitError};
+mod decoder_thread;
 use std::{
     path::PathBuf,
     sync::{atomic::AtomicBool, Arc},
 };
 
-pub use decoder::{FrameData, PipelineEvent, Resolution};
+pub use decoder_thread::{FrameData, PipelineEvent, Resolution};
 
-use crate::{shared::Shared, thread_utils::custom_beams::{self, LooseSender}};
+use crate::{
+    shared::Shared,
+    thread_utils::custom_beams::{self, LooseSender},
+};
 
 pub enum MP4Command {
     // Pause (if possible)
@@ -158,11 +161,11 @@ impl Shared<VideoHandle> {
         })
     }
     pub fn seek(&self, to: f64) {
-        // Seek operations can be loosy 
+        // Seek operations can be loosy
         // while everything else, cannot
         // BUG: needs a way to take a look at the channel
         // to know if the command we just dropped is a important
-        // one like pause, so we gasp! say "my bad", and put it back 
+        // one like pause, so we gasp! say "my bad", and put it back
         self.with(|this| {
             this.command_sender
                 .loosely_send(MP4Command::Seek(to))
