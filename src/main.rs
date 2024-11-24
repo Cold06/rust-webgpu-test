@@ -33,7 +33,7 @@ use crate::js::VM;
 use crate::video::{start, FrameData, PipelineEvent};
 use bytemuck::{Pod, Zeroable};
 use egui::load::SizedTexture;
-use egui::ImageSource;
+use egui::{Button, Color32, ImageSource, ProgressBar, Rounding, Slider};
 use egui_dock::{DockArea, DockState, NodeIndex, Style, SurfaceIndex};
 use egui_wgpu::wgpu::FilterMode;
 use egui_wgpu::{wgpu, ScreenDescriptor};
@@ -135,7 +135,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     });
 
     let mut main_camera = Camera::new(
-        Vec3::new(-137.0, 0.0, 0.0),
+        Vec3::new(-337.0, 0.0, 0.0),
         Vec2::ZERO,
         window_size.width as f32,
         window_size.height as f32,
@@ -148,7 +148,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut focused = false;
     let mut last_frame = Instant::now();
     let mut use_secondary_camera = false;
-
 
     let mut render_passes: Vec<WeakShared<WorldView>> = vec![];
     let mut egui_passes: Vec<WeakShared<WorldView>> = vec![];
@@ -166,31 +165,39 @@ fn main() -> Result<(), Box<dyn Error>> {
     let code_editor_view = frontend::CodeView::new();
 
     let mut dock_state = DockState::new(vec![
-        canvas_example_view.as_tab_handle(SurfaceIndex::main(), NodeIndex(1))
+        stats_view.as_tab_handle(SurfaceIndex::main(), NodeIndex(1)), // canvas_example_view.as_tab_handle(SurfaceIndex::main(), NodeIndex(1)),
     ]);
 
     {
-        let [a, b] = dock_state.main_surface_mut().split_left(
+        let [a, b] = dock_state.main_surface_mut().split_above(
             NodeIndex::root(),
             0.5,
             vec![
-                code_editor_view.as_tab_handle(SurfaceIndex::main(), NodeIndex(6)),
-                chunk_manager_view.as_tab_handle(SurfaceIndex::main(), NodeIndex(3)),
+                video_view.as_tab_handle(SurfaceIndex::main(), NodeIndex(4)),
+                // code_editor_view.as_tab_handle(SurfaceIndex::main(), NodeIndex(6)),
+                // stats_view.as_tab_handle(SurfaceIndex::main(), NodeIndex(8)),
             ],
         );
-        let [_, _] = dock_state.main_surface_mut().split_below(
-            a,
-            0.5,
-            vec![video_view.as_tab_handle(SurfaceIndex::main(), NodeIndex(4))],
-        );
-        let [_, _] = dock_state.main_surface_mut().split_below(
+
+        dock_state.main_surface_mut().split_left(
             b,
-            0.5,
-            vec![
-                world_view1.as_tab_handle(SurfaceIndex::main(), NodeIndex(5)),
-                stats_view.as_tab_handle(SurfaceIndex::main(), NodeIndex(8)),
-            ],
+            0.50,
+            vec![world_view1.as_tab_handle(SurfaceIndex::main(), NodeIndex(0))],
         );
+
+        // let [_, _] = dock_state.main_surface_mut().split_below(
+        //     a,
+        //     0.5,
+        //     vec![],
+        // );
+        // let [_, _] = dock_state.main_surface_mut().split_below(
+        //     b,
+        //     0.5,
+        //     vec![
+        //         // world_view1.as_tab_handle(SurfaceIndex::main(), NodeIndex(5)),
+
+        //     ],
+        // );
     }
 
     let mut counter: usize = 9;
@@ -363,6 +370,43 @@ fn main() -> Result<(), Box<dyn Error>> {
                             } else {
                                 ui.label(format!("No focused tab"));
                             }
+
+                            let visuals = ui.visuals_mut();
+                            visuals.widgets.active.rounding = Rounding::ZERO;
+                            visuals.widgets.inactive.rounding = Rounding::ZERO;
+                            visuals.widgets.hovered.rounding = Rounding::ZERO;
+                            visuals.widgets.hovered.bg_fill = visuals.widgets.inactive.bg_fill; // Same background as inactive
+                            visuals.widgets.hovered.fg_stroke = egui::Stroke::NONE;
+                            visuals.widgets.hovered.bg_stroke = egui::Stroke::NONE;
+
+                            let spacing = ui.spacing_mut();
+                            spacing.item_spacing.x = 0.0; // Horizontal spacing
+                            spacing.item_spacing.y = 0.0;
+
+                            ui.horizontal(|ui| {
+                                let available_width = ui.available_width();
+                                let x = ["A", "B", "C", "D", "E", "F", "G", "H"];
+                                let button_width = available_width / x.len() as f32;
+
+                                let mut count = 0;
+
+                                for _ in x {
+                                    count += 1;
+
+                                    let fill = if count % 2 == 0 {
+                                        Color32::RED
+                                    } else {
+                                        Color32::BLUE
+                                    };
+
+                                    ui.add_sized([button_width, 10.0], Button::new("").fill(fill));
+                                }
+                            });
+
+                            ui.horizontal(|ui| {
+                                let available_width = ui.available_width();
+                                ui.add_sized([available_width, 20.0], ProgressBar::new(0.2));
+                            });
                         });
 
                         {

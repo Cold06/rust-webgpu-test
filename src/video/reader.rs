@@ -192,6 +192,24 @@ impl VideoCursor {
             None
         };
 
+        let stts_box = if let Some(ref reader) = reader {
+            Some(&reader.trak.mdia.minf.stbl.stts)
+        } else {
+            None
+        };
+
+        let mut frame_durations = Vec::new();
+
+        if let Some(stts) = stts_box {
+            for entry in &stts.entries {
+                frame_durations.extend(
+                    std::iter::repeat(entry.sample_delta).take(entry.sample_count as usize),
+                );
+            }
+        }
+
+        // Print or use the frame durations
+
         fn find_nearest_sample(target: u32, numbers: &Vec<u32>) -> Option<u32> {
             let pos = numbers.binary_search(&target).unwrap_or_else(|x| x);
             if pos == 0 {
@@ -222,6 +240,13 @@ impl VideoCursor {
         //
         // also keyframes are useful for determining animation sections
 
+        if let Some(stss) = stss_box {
+            println!(
+                "Keyframe Count {:?}, Frame Durations {:?}",
+                stss.entries.len(),
+                frame_durations.len()
+            );
+        }
 
         match self.command_receiver.try_recv() {
             Ok(command) => match command {

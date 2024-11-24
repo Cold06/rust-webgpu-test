@@ -41,7 +41,7 @@ impl WorldView {
         let view_width = 700.0;
         let view_height = 400.0;
         let secondary_camera = Camera::new(
-            Vec3::new(-50.0, 0.0, 0.0),
+            Vec3::new(-140.0, 0.0, 0.0),
             Vec2::ZERO,
             view_width,
             view_height,
@@ -128,12 +128,12 @@ impl TabView for Shared<WorldView> {
                     [w, h],
                 )));
 
-                view.gizmo_example.draw_gizmo(
-                    ui,
-                    &view.secondary_camera,
-                    w,
-                    h,
-                );
+                // view.gizmo_example.draw_gizmo(
+                //     ui,
+                //     &view.secondary_camera,
+                //     w,
+                //     h,
+                // );
 
                 view.secondary_camera.check_resize(w, h, || {
                     if w as u32 == 0 || h as u32 == 0 {
