@@ -9,7 +9,7 @@ pub use decoder::{FrameData, MP4Command, PipelineEvent, Resolution};
 pub fn start_video_decoding(file: PathBuf) -> (Receiver<PipelineEvent<Frame>>, Sender<MP4Command>) {
     let (command_sender, command_receiver) = crossbeam_channel::bounded::<MP4Command>(1);
 
-    let (yuv_frame_sender, yuv_frame_receiver) = crossbeam_channel::bounded(10);
+    let (yuv_frame_sender, yuv_frame_receiver) = crossbeam_channel::bounded(1);
 
     let (init_result_sender, init_result_receiver) = crossbeam_channel::bounded(0);
 

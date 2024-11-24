@@ -101,56 +101,95 @@ pub fn run_decoder_thread(
     init_result_sender: Sender<Result<(), InputInitError>>,
     frame_sender: Sender<PipelineEvent<Frame>>,
 ) {
-    if let Ok(mut ictx) = input(&file) {
-        let input = ictx
-            .streams()
-            .best(ffmpeg_next::media::Type::Video)
-            .ok_or(ffmpeg_next::Error::StreamNotFound)
-            .expect("No stream found");
-        let video_stream_index = input.index();
+    if let Ok(mut ictx) = ffmpeg_next::format::input(&file) {
+        let (params, video_stream_index, time_base, avg_frame_rate, start_time) = {
+            let input = ictx
+                .streams()
+                .best(ffmpeg_next::media::Type::Video)
+                .ok_or(ffmpeg_next::Error::StreamNotFound)
+                .expect("No stream found");
+            let video_stream_index = input.index();
 
-        let context_decoder =
-            ffmpeg_next::codec::context::Context::from_parameters(input.parameters())
-                .expect("Failed to build context");
+            let start_time = input.start_time();
+
+            let params = input.parameters();
+
+            let time_base = i64::from(input.time_base().denominator());
+
+            let avg_frame_rate = input.avg_frame_rate();
+
+            (
+                params,
+                video_stream_index,
+                time_base,
+                avg_frame_rate,
+                start_time,
+            )
+        };
+
+        init_result_sender.send(Ok(())).unwrap();
+
+        println!("Start Time {}", start_time);
+
+        let context_decoder = ffmpeg_next::codec::context::Context::from_parameters(params.clone())
+            .expect("Failed to build context");
 
         let mut decoder = context_decoder
             .decoder()
             .video()
             .expect("Failed to create video decoder");
 
-        init_result_sender.send(Ok(())).unwrap();
+        let mut frame_idx = 0;
 
-        let receive_and_process_decoded_frames =
-            |decoder: &mut ffmpeg_next::decoder::Video| -> Result<(), ffmpeg_next::Error> {
-                let mut decoded = ffmpeg_next::util::frame::video::Video::empty();
-                while decoder.receive_frame(&mut decoded).is_ok() {
-                    let frame = match frame_from_ffmpeg(&mut decoded) {
-                        Ok(frame) => frame,
-                        Err(_) => {
-                            continue;
+        loop {
+            let mut iter = ictx.packets();
+
+            if let Some((stream, packet)) = iter.next() {
+                if stream.index() == video_stream_index {
+                    decoder
+                        .send_packet(&packet)
+                        .expect("Could not send the packet for some reason");
+
+                    let mut decoded = ffmpeg_next::util::frame::video::Video::empty();
+
+                    while decoder.receive_frame(&mut decoded).is_ok() {
+                        let frame = match frame_from_ffmpeg(&mut decoded) {
+                            Ok(frame) => frame,
+                            Err(_) => {
+                                continue;
+                            }
+                        };
+
+                        if frame_sender.send(PipelineEvent::Data(frame)).is_err() {
+                            return;
                         }
-                    };
 
-                    if frame_sender.send(PipelineEvent::Data(frame)).is_err() {
-                        return Ok(());
+                        let time_sabe = stream.time_base();
+                        let time_base_den =
+                            time_sabe.denominator() as f64 / time_sabe.numerator() as f64;
+
+                        let frame_duration = decoded.packet().duration;
+
+                        let frame_duration_ms = time_base_den as f64 / frame_duration as f64;
+
+                        std::thread::sleep(Duration::from_secs_f64(frame_duration_ms / 1000.0));
+                        frame_idx += 1;
+                        if frame_idx >= 100 {
+                            let seek_to = 6000_0000;
+                            frame_idx = 0;
+                            println!("Seeking to {seek_to}");
+                            ictx.seek(seek_to, ..seek_to).unwrap();
+
+                            break;
+                        }
                     }
-
-                    // std::thread::sleep(Duration::from_millis(16));
                 }
-                Ok(())
-            };
-
-        for (stream, packet) in ictx.packets() {
-            if stream.index() == video_stream_index {
-                decoder
-                    .send_packet(&packet)
-                    .expect("Could not send the packet for some reason");
-                receive_and_process_decoded_frames(&mut decoder)
-                    .expect("Could not process decoded frames");
+            } else {
+                break;
             }
         }
+
         decoder.send_eof().expect("EOF sending failed");
-        receive_and_process_decoded_frames(&mut decoder).expect("Failed to process the last frame");
     }
 
     if frame_sender.send(PipelineEvent::EOS).is_err() {

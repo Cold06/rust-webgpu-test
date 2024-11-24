@@ -72,9 +72,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut vm = Shared::new(VM::new());
 
-    let video_path = get_random_file_from_directory("/Volumes/dev/Shared/mp4")
-        .or_else(|| Some(PathBuf::from("/Users/cold/Desktop/YP-1R-05x13.mp4")))
-        .unwrap();
+    // let video_path = get_random_file_from_directory("/Volumes/dev/Shared/mp4")
+    //     .or_else(|| Some(PathBuf::from("/Users/cold/Desktop/YP-1R-05x13.mp4")))
+    //     .unwrap();
+
+    let video_path = PathBuf::from("/Users/cold/Desktop/YP-1R-05x13.mp4");
 
     println!("Now playing: {:?}", video_path);
 
