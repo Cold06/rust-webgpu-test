@@ -18,6 +18,7 @@ mod multimath;
 mod paint_utils;
 mod pipelines;
 mod shared;
+mod thread_utils;
 mod video;
 mod window;
 

@@ -8,7 +8,7 @@ use std::{
 
 pub use decoder::{FrameData, PipelineEvent, Resolution};
 
-use crate::shared::Shared;
+use crate::{shared::Shared, thread_utils::custom_beams::{self, LooseSender}};
 
 pub enum MP4Command {
     // Pause (if possible)
@@ -74,10 +74,9 @@ pub struct VideoHandle {
     close_thread: Arc<AtomicBool>,
     pub total_duration: f64,
     pub progress: f64,
-    pub is_paused: bool,
     pub play_speed: PlaySpeed,
     play_state: PlayState,
-    command_sender: Sender<MP4Command>,
+    command_sender: LooseSender<MP4Command>,
     update_receiver: Receiver<VideoUpdateInfo>,
     yuv_frame_receiver: Receiver<PipelineEvent<Frame>>,
 }
@@ -91,7 +90,7 @@ impl Drop for VideoHandle {
 
 impl VideoHandle {
     pub fn create(file: PathBuf) -> Shared<VideoHandle> {
-        let (command_sender, command_receiver) = crossbeam_channel::bounded::<MP4Command>(1);
+        let (command_sender, command_receiver) = custom_beams::loose::<MP4Command>(1);
 
         let (update_sender, update_receiver) = crossbeam_channel::bounded::<VideoUpdateInfo>(1);
 
@@ -130,7 +129,6 @@ impl VideoHandle {
                 fps: data.fps,
                 total_duration: data.total_duration,
                 progress: 0.0,
-                is_paused: false,
                 play_state: PlayState::Playing,
                 play_speed: PlaySpeed::Normal,
                 command_sender,
@@ -160,9 +158,14 @@ impl Shared<VideoHandle> {
         })
     }
     pub fn seek(&self, to: f64) {
+        // Seek operations can be loosy 
+        // while everything else, cannot
+        // BUG: needs a way to take a look at the channel
+        // to know if the command we just dropped is a important
+        // one like pause, so we gasp! say "my bad", and put it back 
         self.with(|this| {
             this.command_sender
-                .send(MP4Command::Seek(to))
+                .loosely_send(MP4Command::Seek(to))
                 .expect("Sending commands should always succed")
         });
     }
