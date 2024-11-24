@@ -95,7 +95,7 @@ impl VideoHandle {
     pub fn create(file: PathBuf) -> Shared<VideoHandle> {
         let (command_sender, command_receiver) = custom_beams::loose::<MP4Command>(1);
 
-        let (update_sender, update_receiver) = crossbeam_channel::bounded::<VideoUpdateInfo>(1);
+        let (update_sender, update_receiver) = custom_beams::loose::<VideoUpdateInfo>(1);
 
         let (yuv_frame_sender, yuv_frame_receiver) = custom_beams::loose(1);
 

@@ -6,7 +6,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use crate::{thread_utils::custom_beams::LooseSender, video::PlaySpeed};
@@ -96,7 +96,7 @@ pub fn run_decoder_thread(
     frame_sender: LooseSender<PipelineEvent<Frame>>,
     close_thread: Arc<AtomicBool>,
     command_receiver: Receiver<MP4Command>,
-    update_sender: Sender<VideoUpdateInfo>,
+    update_sender: LooseSender<VideoUpdateInfo>,
 ) {
     if let Ok(mut ictx) = ffmpeg_next::format::input(&file) {
         let (
@@ -173,6 +173,8 @@ pub fn run_decoder_thread(
 
             let speed = PlaySpeed::Normal;
 
+            let mut last = Instant::now();
+
             if let Some((stream, packet)) = iter.next() {
                 if stream.index() == video_stream_index {
                     decoder
@@ -204,7 +206,7 @@ pub fn run_decoder_thread(
                         //     decoded.pts().unwrap() as f64 / time_base_den
                         // );
 
-                        drop(update_sender.try_send(VideoUpdateInfo::Frame(
+                        drop(update_sender.loosely_send(VideoUpdateInfo::Frame(
                             decoded.pts().unwrap() as f64 / time_base_den,
                         )));
 
@@ -214,20 +216,13 @@ pub fn run_decoder_thread(
 
                         let frame_duration = decoded.packet().duration;
 
-                        if speed == PlaySpeed::Fastest {
+                        let frame_duration_ms = time_base_den as f64 / frame_duration as f64;
 
-                        } else {
-                            let frame_duration_ms = time_base_den as f64 / frame_duration as f64;
-    
-                            std::thread::sleep(Duration::from_secs_f64(frame_duration_ms / 1000.0));
-                        }
-
+                        std::thread::sleep(Duration::from_secs_f64(frame_duration_ms / 1000.0));
 
                         if let Ok(command) = command_receiver.try_recv() {
                             match command {
                                 MP4Command::Seek(value) => {
-                                    println!("User wants to seek to {value}");
-
                                     let dur = stream.duration();
                                     let num = stream.frames();
                                     let fps: f64 = stream.avg_frame_rate().into();
