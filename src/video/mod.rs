@@ -1,28 +1,28 @@
-use std::path::PathBuf;
 use crossbeam_channel::{Receiver, Sender};
-use crate::video::decoder::{start_video_decoder_thread, Frame};
-use crate::video::reader::{create_mp4_reader_thread, Mp4FileReader};
+use decoder::{run_decoder_thread, Frame};
+use std::path::PathBuf;
 
 mod decoder;
-mod reader;
 
-pub use decoder::{Resolution, FrameData};
-pub use reader::{MP4Command, PipelineEvent};
+pub use decoder::{FrameData, MP4Command, PipelineEvent, Resolution};
 
-pub fn start(
-    file: PathBuf,
-) -> (
-    Mp4FileReader,
-    Receiver<PipelineEvent<Frame>>,
-    Sender<MP4Command>,
-) {
+pub fn start_video_decoding(file: PathBuf) -> (Receiver<PipelineEvent<Frame>>, Sender<MP4Command>) {
     let (command_sender, command_receiver) = crossbeam_channel::bounded::<MP4Command>(1);
-
-    let (file_reader, video_receiver) = create_mp4_reader_thread(file, command_receiver);
 
     let (yuv_frame_sender, yuv_frame_receiver) = crossbeam_channel::bounded(10);
 
-    start_video_decoder_thread(video_receiver, yuv_frame_sender);
+    let (init_result_sender, init_result_receiver) = crossbeam_channel::bounded(0);
 
-    (file_reader, yuv_frame_receiver, command_sender)
+    std::thread::Builder::new()
+        .name(format!("h264 ffmpeg decoder {}", 0))
+        .spawn(move || {
+            println!("Starting FFMPEG decoder thread");
+
+            run_decoder_thread(file, init_result_sender, yuv_frame_sender)
+        })
+        .unwrap();
+
+    init_result_receiver.recv().unwrap().unwrap();
+
+    (yuv_frame_receiver, command_sender)
 }

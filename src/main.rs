@@ -30,7 +30,7 @@ use crate::egui_tools::EguiRenderer;
 use crate::frontend::{HandleList, TabHandle};
 use crate::gpu::{GPUCtx, GPUTexture, SView, ViewTarget};
 use crate::js::VM;
-use crate::video::{start, FrameData, PipelineEvent};
+use crate::video::{start_video_decoding, FrameData};
 use bytemuck::{Pod, Zeroable};
 use egui::load::SizedTexture;
 use egui::{Button, Color32, ImageSource, ProgressBar, Rounding, Slider};
@@ -38,12 +38,13 @@ use egui_dock::{DockArea, DockState, NodeIndex, Style, SurfaceIndex};
 use egui_wgpu::wgpu::FilterMode;
 use egui_wgpu::{wgpu, ScreenDescriptor};
 use frontend::{TabView, WorldView};
+use fs_utils::get_random_file_from_directory;
 use glam::*;
 use shared::{Shared, WeakShared};
 use std::error::Error;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
-use video::MP4Command;
+use video::{MP4Command, PipelineEvent};
 use winit::{
     event::{ElementState, Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -67,18 +68,17 @@ fn fps(frame_duration: Duration) -> f64 {
 fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
 
+    ffmpeg_next::init().unwrap();
+
     let mut vm = Shared::new(VM::new());
 
-    // Choose a video
-    // let video_path = get_random_file_from_directory("/Volumes/dev/Shared/mp4")
-    //     .or_else(|| Some(PathBuf::from("/Users/cold/Desktop/YP-1R-05x13.mp4")))
-    //     .unwrap();
-
-    let video_path = PathBuf::from("/Users/cold/Desktop/YP-1R-05x13.mp4");
+    let video_path = get_random_file_from_directory("/Volumes/dev/Shared/mp4")
+        .or_else(|| Some(PathBuf::from("/Users/cold/Desktop/YP-1R-05x13.mp4")))
+        .unwrap();
 
     println!("Now playing: {:?}", video_path);
 
-    let (video_thread, video_receiver, command_sender) = start(video_path);
+    let (video_receiver, command_sender) = start_video_decoding(video_path);
 
     let event_loop = EventLoop::new()?;
 
@@ -541,8 +541,6 @@ fn main() -> Result<(), Box<dyn Error>> {
             _ => {}
         }
     })?;
-
-    drop(video_thread);
 
     Ok(())
 }
