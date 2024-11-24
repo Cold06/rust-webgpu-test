@@ -6,9 +6,27 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
-pub use decoder::{FrameData, MP4Command, PipelineEvent, Resolution};
+pub use decoder::{FrameData, PipelineEvent, Resolution};
 
 use crate::shared::Shared;
+
+pub enum MP4Command {
+    // Pause (if possible)
+    Pause,
+    // Play (if possible)
+    Play,
+    // Pause + Go to star
+    Stop,
+    // Go +10 seconds
+    SkipForward,
+    // Go -10 seconds
+    SkipBackward,
+    // Go to a specific time (convert duration to sample_id)
+    Seek(f64),
+
+    // Go to middle
+    GoToMiddle,
+}
 
 pub enum VideoUpdateInfo {
     Started,
@@ -113,7 +131,7 @@ impl VideoHandle {
                 total_duration: data.total_duration,
                 progress: 0.0,
                 is_paused: false,
-                play_state: PlayState::Stopped,
+                play_state: PlayState::Playing,
                 play_speed: PlaySpeed::Normal,
                 command_sender,
                 update_receiver,
@@ -137,9 +155,9 @@ impl Shared<VideoHandle> {
         })
     }
     pub fn stop(&self) {
-        // self.with(|this| {
-        //     this.play_state = PlayState::Playing;
-        // })
+        self.with(|this| {
+            drop(this.command_sender.send(MP4Command::GoToMiddle));
+        })
     }
     pub fn seek(&self, to: f64) {
         self.with(|this| {

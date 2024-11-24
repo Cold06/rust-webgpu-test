@@ -460,7 +460,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                             let value = video_handle.clone();
 
                             video_view.ui(move |ui: &mut egui::Ui| {
-                                let mut prog = value.with(|video| {
+                                let prog = value.with(|video| {
                                     ui.label(format!("Movie avg framerate: {:.2}FPS", video.fps));
                                     ui.label(format!(
                                         "Movie length: {:.2}ms",
@@ -498,17 +498,27 @@ fn main() -> Result<(), Box<dyn Error>> {
                                     //     value.try_send(MP4Command::Seek(Duration::from_millis(0)));
                                 }
 
+                                let mut new_prog = prog;
+
                                 ui.horizontal(|ui| {
                                     let available_width = ui.available_width();
 
                                     ui.spacing_mut().slider_width = available_width;
 
-                                    ui.add(
-                                        Slider::new(&mut prog, 0.0..=1.0)
-                                            .step_by(0.001)
-                                            .show_value(false),
-                                    );
+                                    ui.add(Slider::new(&mut new_prog, 0.0..=1.0).show_value(false))
                                 });
+
+                                ui.label(format!("new_prog: {:.6}", new_prog));
+                                ui.label(format!("prog: {:.6}", prog));
+
+                                if new_prog == prog {
+                                    ui.label(format!("OK: {:.6}", prog - new_prog));
+                                } else {
+
+                                    value.seek(new_prog);
+
+                                    ui.label(format!("CHANGING: {:.6}", prog - new_prog));
+                                }
                             });
 
                             egui_renderer.end_frame_and_draw(

@@ -10,22 +10,7 @@ use std::{
 };
 use tracing::{debug, error};
 
-use super::{InitData, VideoUpdateInfo};
-
-pub enum MP4Command {
-    // Pause (if possible)
-    Pause,
-    // Play (if possible)
-    Play,
-    // Pause + Go to star
-    Stop,
-    // Go +10 seconds
-    SkipForward,
-    // Go -10 seconds
-    SkipBackward,
-    // Go to a specific time (convert duration to sample_id)
-    Seek(f64),
-}
+use super::{InitData, MP4Command, VideoUpdateInfo};
 
 #[derive(Debug)]
 pub enum PipelineEvent<T> {
@@ -113,7 +98,15 @@ pub fn run_decoder_thread(
     update_sender: Sender<VideoUpdateInfo>,
 ) {
     if let Ok(mut ictx) = ffmpeg_next::format::input(&file) {
-        let (params, video_stream_index, avg_frame_rate, start_time, duration) = {
+        let (
+            time_base_as_f64,
+            total_duration,
+            params,
+            video_stream_index,
+            avg_frame_rate,
+            start_time,
+            duration,
+        ) = {
             let input = ictx
                 .streams()
                 .best(ffmpeg_next::media::Type::Video)
@@ -122,6 +115,7 @@ pub fn run_decoder_thread(
             let video_stream_index = input.index();
 
             let time_sabe = input.time_base();
+            let time_base_as_f64: f64 = time_sabe.into();
             let time_base_den = time_sabe.denominator() as f64 / time_sabe.numerator() as f64;
 
             let start_time = input.start_time();
@@ -133,6 +127,8 @@ pub fn run_decoder_thread(
             let avg_frame_rate = input.avg_frame_rate();
 
             (
+                time_base_as_f64,
+                input.duration(),
                 params,
                 video_stream_index,
                 avg_frame_rate,
@@ -169,6 +165,8 @@ pub fn run_decoder_thread(
 
             let speed_scalar = 1.0;
 
+            let mut seek_to: Option<i64> = None;
+
             if let Some((stream, packet)) = iter.next() {
                 if stream.index() == video_stream_index {
                     decoder
@@ -193,6 +191,15 @@ pub fn run_decoder_thread(
                         let time_base_den =
                             time_sabe.denominator() as f64 / time_sabe.numerator() as f64;
 
+                        let time_base_den2 =
+                            time_sabe.numerator() as f64 / time_sabe.denominator() as f64;
+
+                        println!(
+                            "PTS {} Dur {:.2}",
+                            decoded.pts().unwrap(),
+                            decoded.pts().unwrap() as f64 / time_base_den
+                        );
+
                         drop(update_sender.try_send(VideoUpdateInfo::Frame(
                             decoded.pts().unwrap() as f64 / time_base_den,
                         )));
@@ -207,6 +214,42 @@ pub fn run_decoder_thread(
 
                         std::thread::sleep(Duration::from_secs_f64(frame_duration_ms / 1000.0));
 
+                        if let Ok(command) = command_receiver.try_recv() {
+                            match command {
+                                MP4Command::Seek(value) => {
+                                    
+
+                                    let dur = stream.duration();
+                                    let num = stream.frames();
+                                    let fps: f64 = stream.avg_frame_rate().into();
+                                    let time_base = stream.time_base();
+                                    let start_time = stream.start_time();
+
+                                    println!("\t duration: {}", dur);
+                                    println!("\t num: {}", num);
+                                    println!("\t fps: {}", fps);
+                                    println!("\t time_base: {}", time_base);
+                                    println!("\t start_time: {}", start_time);
+
+                                    let target = (num as f64 / 2.0).ceil() as i64;
+                                    let target_sec = target as f64 / fps;
+                                    let target_timestamp =
+                                        (target_sec / f64::from(time_base)) as i64 + start_time;
+
+                                    println!("\t target: {}", target);
+                                    println!("\t target_sec: {}", target_sec);
+                                    println!("\t target_timestamp: {}", target_timestamp);
+
+
+                                    seek_to = Some((stream.duration() as f64 * 62.29626645645534 * value).round() as i64);
+
+                                    decoder.flush();
+                                    break;
+                                }
+                                _ => {}
+                            }
+                        }
+
                         // frame_idx += 1;
                         // if frame_idx >= 100 {
                         //     let seek_to = 6000_0000;
@@ -216,6 +259,12 @@ pub fn run_decoder_thread(
 
                         //     break;
                         // }
+                    }
+
+                    if let Some(seek_to) = seek_to.take() {
+                        println!("Seeking to {seek_to}");
+                        ictx.seek(seek_to, (seek_to - 1000000)..(seek_to + 1000000))
+                            .unwrap();
                     }
 
                     if should_stop() {
