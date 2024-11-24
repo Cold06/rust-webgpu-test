@@ -73,67 +73,25 @@ fn fps(frame_duration: Duration) -> f64 {
 
 struct ApplicationHack {
     os_window: Shared<OSWindow>,
-    resumed_span: Option<Span>,
     boxed_fn: Box<dyn FnMut(&ActiveEventLoop, WindowId, WindowEvent)>,
 }
 
-struct Span {
-    start: Instant,
-    msg: String,
-}
-
-fn span(name: impl Into<String>) -> Span {
-    Span {
-        msg: name.into(),
-        start: Instant::now(),
-    }
-}
-
-impl Span {
-    fn end(self) {
-        drop(self)
-    }
-}
-
-impl Drop for Span {
-    fn drop(&mut self) {
-        println!(
-            "{}",
-            format!("{} {:#?}", self.msg, Instant::now() - self.start)
-        )
-    }
-}
-
 impl ApplicationHack {
-    fn new(ctx: GPUCtx, os_window: Shared<OSWindow>, resume_span: Span) -> Self {
-        let s = span("JS VM Creation");
-
+    fn new(ctx: GPUCtx, os_window: Shared<OSWindow>) -> Self {
         let mut vm = Shared::new(VM::new());
-
-        s.end();
 
         // let video_path = get_random_file_from_directory("/Volumes/dev/Shared/mp4")
         //     .or_else(|| Some(PathBuf::from("/Users/cold/Desktop/YP-1R-05x13.mp4")))
         //     .unwrap();
 
-        let s = span("Video Thread Creation");
-
         let video_path = PathBuf::from("/Users/cold/Desktop/YP-1R-05x13.mp4");
         let video_handle = VideoHandle::create(video_path);
-
-        s.end();
-
-        let s = span("Main Render Target Creation");
 
         let window_size = { os_window.borrow().window.inner_size() };
         let high_dpi_factor = 2.0 * { os_window.borrow().window.scale_factor() as f32 };
 
         let mut main_render_target_depth =
             ViewTarget::create(&ctx, window_size.width, window_size.height);
-
-        s.end();
-
-        let s = span("EGUI Renderer creation");
 
         let mut egui_renderer = EguiRenderer::new(
             &ctx.device,
@@ -143,22 +101,12 @@ impl ApplicationHack {
             { &os_window.borrow().window },
         );
 
-        s.end();
-
-        let s = span("Chunks Demo Creation");
-
         let chunks_demo = Shared::new(ChunksDemo::create(
             &os_window.borrow().surface_configuration,
             &ctx,
         ));
-        s.end();
-
-        let s = span("Video Demo Creation");
 
         let mut video_demo = VideoDemo::create(&ctx, &os_window.borrow().surface_configuration);
-        s.end();
-
-        let s = span("Skia Canvas Creation");
 
         let canvas_size = [1000.0 * high_dpi_factor, 1000.0 * high_dpi_factor];
         let skia_canvas = Shared::new(Canvas::new(
@@ -166,10 +114,6 @@ impl ApplicationHack {
             canvas_size[1] as u32,
             high_dpi_factor,
         ));
-
-        s.end();
-
-        let s = span("Skia Texture Seed");
 
         {
             let code = String::from(include_str!(
@@ -199,8 +143,6 @@ impl ApplicationHack {
                 .register_native_texture(&ctx.device, &t.view, FilterMode::Linear)
         });
 
-        s.end();
-
         let mut main_camera = Camera::new(
             Vec3::new(-337.0, 0.0, 0.0),
             Vec2::ZERO,
@@ -218,8 +160,6 @@ impl ApplicationHack {
 
         let mut render_passes: Vec<WeakShared<WorldView>> = vec![];
         let mut egui_passes: Vec<WeakShared<WorldView>> = vec![];
-
-        let s = span("Dock space creation");
 
         let world_view1 = frontend::WorldView::new(
             &ctx,
@@ -271,19 +211,10 @@ impl ApplicationHack {
 
         let mut counter: usize = 9;
 
-        s.end();
-
         Self {
-            resumed_span: Some(resume_span),
             os_window: os_window.clone(),
             boxed_fn: Box::new(move |event_loop, window_id, event| {
-                let s = span("  ======  Frame  ======  ");
-
-                let mut s1 = span("Video Sync");
-
                 video_handle.sync();
-
-                s1 = span("Camera Sync");
 
                 if use_secondary_camera {
                     world_view1.with(|view| {
@@ -297,25 +228,18 @@ impl ApplicationHack {
                     process_camera_input(focused, event.clone(), &mut camera_controller);
                 }
 
-                s1 = span("EGui Handle Input");
-
                 egui_renderer.handle_input(&os_window.borrow().window, &event);
-
-
 
                 match event {
                     WindowEvent::Resized(size) => {
-                        s1 = span("Resized Event Processing");
                         main_render_target_depth.resize(&ctx, size.width, size.height);
                         os_window.borrow_mut().re_configure(&ctx);
                         main_camera.resize(size.width as f32, size.height as f32);
                     }
                     WindowEvent::CloseRequested => {
-                        s1 = span("Close Request Processing");
                         event_loop.exit();
                     }
                     WindowEvent::KeyboardInput { event, .. } => {
-                        s1 = span("Keyboard Input Processing");
                         if let Key::Named(NamedKey::Escape) = event.logical_key {
                             if event.state.is_pressed() {
                                 os_window
@@ -339,7 +263,6 @@ impl ApplicationHack {
                         button: winit::event::MouseButton::Left,
                         ..
                     } => {
-                        s1 = span("Mouse Input Processing");
                         // if !egui_renderer.state.egui_ctx().is_pointer_over_area() {
                         //     os_window
                         //         .window
@@ -350,18 +273,10 @@ impl ApplicationHack {
                         // }
                     }
                     WindowEvent::RedrawRequested => {
-
-                        s1 = span("Redraw Processing");
-
-
-                        let mut s2 = span("Prelude update");
-
                         // Compute Delta
                         let now = Instant::now();
                         let delta = now - last_frame;
                         last_frame = now;
-
-                        s2 = span("Camera Update");
 
                         // Update Cameras
                         camera_controller.update_camera(&mut main_camera, delta);
@@ -370,15 +285,11 @@ impl ApplicationHack {
                         // TODO: This is also TRASH we should not
                         // need to match against the enum
 
-                        s2 = span("Location Update");
-
                         world_view1.with(|view| {
                             let transform = view.get_transform(delta);
 
                             video_demo.update_location(&ctx, transform);
                         });
-
-                        s2 = span("Frame Surface Creation");
 
                         // Get Surface Texture
                         let frame = match os_window.borrow().surface.get_current_texture() {
@@ -388,8 +299,6 @@ impl ApplicationHack {
                                 return;
                             }
                         };
-
-                        s2 = span("Upload Video Texture");
 
                         // Try to update video texture
                         if let Some(event) = video_handle.try_read_next_frame() {
@@ -413,8 +322,6 @@ impl ApplicationHack {
                                 }
                             }
                         }
-
-                        s2 = span("Render Pass Setup");
 
                         let frame_view = &frame.texture.create_view(&Default::default());
 
@@ -440,9 +347,6 @@ impl ApplicationHack {
                                 ctx.queue.submit([encoder.finish()]);
                             };
 
-
-                            s2 = span("EGUI Passes");
-
                         {
                             for item in &egui_passes {
                                 if let Some(rc) = item.upgrade() {
@@ -452,8 +356,6 @@ impl ApplicationHack {
                             egui_passes.retain(|weak| weak.upgrade().is_some());
                         }
 
-                        s2 = span("Render Passes");
-
                         {
                             for item in &render_passes {
                                 if let Some(rc) = item.upgrade() {
@@ -462,8 +364,6 @@ impl ApplicationHack {
                             }
                             render_passes.retain(|weak| weak.upgrade().is_some());
                         }
-
-                        s2 = span("Focused Tab View");
 
                         let v = dock_state.focused_leaf();
 
@@ -477,12 +377,7 @@ impl ApplicationHack {
                             }
                         });
 
-
-
                         {
-
-                            s2 = span("EGUI Setup");
-
                             let mut encoder =
                                 ctx.device.create_command_encoder(&Default::default());
 
@@ -522,8 +417,6 @@ impl ApplicationHack {
                             let inner_text = skia_gpu_texture.clone();
                             let inner_ctx = ctx.clone();
 
-                            s2 = span("Canvas View");
-
                             canvas_example_view.ui(move |ui| {
                                 ui.label(format!("Available Size {}", ui.available_size()));
                                 ui.label(format!("Inner Size {:#?}", inner_size));
@@ -555,20 +448,15 @@ impl ApplicationHack {
                                 }
                             });
 
-                            s2 = span("Chunk Manager View");
-
                             let inner_ctx = ctx.clone();
 
                             let inner_c_demo = chunks_demo.clone();
-
 
                             chunk_manager_view.ui(move |ui| {
                                 if ui.button("Spawn Chunk").clicked() {
                                     inner_c_demo.with(|u| u.spawn_chunk(&inner_ctx));
                                 }
                             });
-
-                            s2 = span("Video View");
 
                             let value = video_handle.clone();
 
@@ -633,8 +521,6 @@ impl ApplicationHack {
                                 }
                             });
 
-                            s2 = span("Late EGUI Setup");
-
                             egui_renderer.end_frame_and_draw(
                                 &ctx.device,
                                 &ctx.queue,
@@ -652,19 +538,13 @@ impl ApplicationHack {
                                 },
                             );
 
-                            s2 = span("Queue Submission");
-
                             ctx.queue.submit(Some(encoder.finish()));
                         }
-
-                        let s3 = span("Frame Present");
 
                         frame.present();
                     }
                     _ => {}
                 }
-
-                s.end();
             }),
         }
     }
@@ -685,15 +565,13 @@ impl ApplicationHandler for ApplicationHack {
     }
 
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        if let Some(span) = self.resumed_span.take() {
-            span.end();
-        }
+        // if let Some(span) = self.resumed_span.take() {
+        //     span.end();
+        // }
     }
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let resume_span = span("Time to resume");
-
     env_logger::init();
 
     ffmpeg_next::init().unwrap();
@@ -706,7 +584,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         os_window.borrow_mut().window.set_maximized(true)
     };
 
-    let mut app = ApplicationHack::new(ctx, os_window, resume_span);
+    let mut app = ApplicationHack::new(ctx, os_window);
 
     event_loop.run_app(&mut app)?;
 
