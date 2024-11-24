@@ -26,7 +26,7 @@ pub fn get_surface_configuration(size: PhysicalSize<u32>) -> wgpu::SurfaceConfig
         width: size.width,
         height: size.height,
         present_mode: wgpu::PresentMode::Immediate,
-        desired_maximum_frame_latency: 2,
+        desired_maximum_frame_latency: 1,
         alpha_mode: wgpu::CompositeAlphaMode::Auto,
         view_formats: vec![wgpu::TextureFormat::Bgra8Unorm],
     }

@@ -8,7 +8,6 @@ use std::{
     },
     time::Duration,
 };
-use tracing::{debug, error};
 
 use super::{InitData, MP4Command, VideoUpdateInfo};
 
@@ -215,7 +214,6 @@ pub fn run_decoder_thread(
                         if let Ok(command) = command_receiver.try_recv() {
                             match command {
                                 MP4Command::Seek(value) => {
-
                                     println!("User wants to seek to {value}");
 
                                     let dur = stream.duration();
@@ -281,6 +279,6 @@ pub fn run_decoder_thread(
     }
 
     if frame_sender.send(PipelineEvent::EOS).is_err() {
-        debug!("Failed to send EOS from H264 decoder. Channel closed.")
+        println!("Failed to send EOS from H264 decoder. Channel closed.")
     }
 }

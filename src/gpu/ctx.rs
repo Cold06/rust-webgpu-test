@@ -1,3 +1,4 @@
+use crate::shared::Shared;
 use crate::window::OSWindow;
 use egui_wgpu::wgpu;
 use pollster::block_on;
@@ -21,7 +22,7 @@ impl Clone for GPUCtx {
 }
 
 impl GPUCtx {
-    pub fn new(event_loop: &EventLoop<()>) -> (Self, OSWindow) {
+    pub fn new(event_loop: &EventLoop<()>) -> (Self, Shared<OSWindow>) {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::PRIMARY,
             ..Default::default()
@@ -47,7 +48,7 @@ impl GPUCtx {
 
         window.init_configuration(&ctx);
 
-        (ctx, window)
+        (ctx, Shared::new(window))
     }
 
     #[allow(unused)]

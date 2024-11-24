@@ -1,9 +1,3 @@
-use std::io::{Read, Seek, SeekFrom};
-use std::os::unix::fs::MetadataExt;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
-use std::time::Duration;
 use bytes::{Buf, Bytes, BytesMut};
 use crossbeam_channel::{bounded, Receiver, Sender};
 use ffmpeg_next::codec::{Context, Id};
@@ -12,7 +6,12 @@ use ffmpeg_next::frame::Video;
 use ffmpeg_next::media::Type;
 use ffmpeg_next::Rational;
 use mp4::Mp4Reader;
-use tracing::{debug, error, span, trace, warn};
+use std::io::{Read, Seek, SeekFrom};
+use std::os::unix::fs::MetadataExt;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
+use std::time::Duration;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VideoDecoder {
@@ -33,7 +32,6 @@ pub enum VideoCodec {
 pub enum EncodedChunkKind {
     Video(VideoCodec),
 }
-
 
 struct TrackInfo<DecoderOptions, SampleUnpacker: FnMut(mp4::Mp4Sample) -> Bytes> {
     sample_count: u32,
@@ -168,14 +166,8 @@ pub struct EncodedChunk {
 type ChunkReceiver = Receiver<PipelineEvent<EncodedChunk>>;
 
 enum Mp4ReaderOptions {
-    NonFragmented {
-        file: PathBuf,
-        should_loop: bool,
-    },
+    NonFragmented { file: PathBuf, should_loop: bool },
 }
-
-
-
 
 fn run_reader_thread<Reader: Read + Seek, DecoderOptions>(
     mut reader: Mp4Reader<Reader>,
@@ -196,7 +188,6 @@ fn run_reader_thread<Reader: Read + Seek, DecoderOptions>(
 
         // track_info.sample_count is gotten from the Mp4 metadata
         for i in 1..track_info.sample_count {
-
             // Control variable to be able to force a stop
             if stop_thread.load(std::sync::atomic::Ordering::Relaxed) {
                 return;
@@ -258,7 +249,6 @@ fn run_reader_thread<Reader: Read + Seek, DecoderOptions>(
     }
 }
 
-
 impl<DecoderOptions: Clone + Send + 'static> Mp4FileReader<DecoderOptions> {
     fn new<
         TReader: Read + Seek + Send + 'static,
@@ -311,9 +301,9 @@ impl<DecoderOptions: Clone + Send + 'static> Mp4FileReader<DecoderOptions> {
 }
 
 impl Mp4FileReader<VideoDecoderOptions> {
-
-
-    fn new_video(options: Mp4ReaderOptions) -> Result<Option<(Mp4FileReader<VideoDecoderOptions>, ChunkReceiver)>, Mp4Error> {
+    fn new_video(
+        options: Mp4ReaderOptions,
+    ) -> Result<Option<(Mp4FileReader<VideoDecoderOptions>, ChunkReceiver)>, Mp4Error> {
         let stop_thread = Arc::new(AtomicBool::new(false));
 
         match options {
@@ -321,7 +311,14 @@ impl Mp4FileReader<VideoDecoderOptions> {
                 let input_file = std::fs::File::open(file)?;
                 let size = input_file.metadata()?.size();
 
-                Self::new(input_file, size, find_h264_info, None, stop_thread, should_loop)
+                Self::new(
+                    input_file,
+                    size,
+                    find_h264_info,
+                    None,
+                    stop_thread,
+                    should_loop,
+                )
             }
         }
     }
@@ -334,12 +331,12 @@ enum VideoInputReceiver {
     },
 }
 
-
 fn middle(file: PathBuf) -> (Mp4FileReader<VideoDecoderOptions>, VideoInputReceiver) {
     let video = Mp4FileReader::new_video(Mp4ReaderOptions::NonFragmented {
         file,
         should_loop: false,
-    }).unwrap();
+    })
+    .unwrap();
 
     let (video_reader, video_receiver) = match video {
         Some((reader, receiver)) => {
@@ -361,11 +358,10 @@ pub fn start_video_decoder_thread(
     frame_sender: Sender<PipelineEvent<Frame>>,
 ) {
     match options.decoder {
-        VideoDecoder::FFmpegH264 => start_ffmpeg_decoder_thread(
-            chunks_receiver,
-            frame_sender,
-        ).unwrap(),
-   };
+        VideoDecoder::FFmpegH264 => {
+            start_ffmpeg_decoder_thread(chunks_receiver, frame_sender).unwrap()
+        }
+    };
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -398,8 +394,12 @@ pub struct Frame {
     pub pts: Duration,
 }
 
-
-fn start(file: PathBuf) -> (Mp4FileReader<VideoDecoderOptions>, Receiver<PipelineEvent<Frame>>)  {
+fn start(
+    file: PathBuf,
+) -> (
+    Mp4FileReader<VideoDecoderOptions>,
+    Receiver<PipelineEvent<Frame>>,
+) {
     let (file_reader, video_receiver) = middle(file);
 
     let yuv_frame_receiver = match video_receiver {
@@ -408,11 +408,7 @@ fn start(file: PathBuf) -> (Mp4FileReader<VideoDecoderOptions>, Receiver<Pipelin
             chunk_receiver,
         } => {
             let (sender, receiver) = bounded(10);
-            start_video_decoder_thread(
-                decoder_options,
-                chunk_receiver,
-                sender,
-            );
+            start_video_decoder_thread(decoder_options, chunk_receiver, sender);
             receiver
         }
     };
@@ -436,7 +432,6 @@ enum DecoderChunkConversionError {
     )]
     BadPayloadType(EncodedChunkKind),
 }
-
 
 fn chunk_to_av(chunk: EncodedChunk) -> Result<ffmpeg_next::Packet, DecoderChunkConversionError> {
     if chunk.kind != EncodedChunkKind::Video(VideoCodec::H264) {
@@ -474,7 +469,6 @@ fn copy_plane_from_av(decoded: &Video, plane: usize) -> bytes::Bytes {
     output_buffer.freeze()
 }
 
-
 fn frame_from_av(
     decoded: &mut Video,
     pts_offset: &mut Option<i64>,
@@ -489,7 +483,7 @@ fn frame_from_av(
             DecoderFrameConversionError::FrameConversionError("missing pts".to_owned())
         })?;
     if pts < 0 {
-        error!(pts, pts_offset, "Received negative PTS. PTS values of the decoder output are not monotonically increasing.")
+        println!("Received negative PTS. PTS values of the decoder output are not monotonically increasing. ({})", pts);
     }
     let pts = Duration::from_micros(i64::max(pts, 0) as u64);
     let data = match decoded.format() {
@@ -563,7 +557,7 @@ fn run_decoder_thread(
         let av_packet: ffmpeg_next::Packet = match chunk_to_av(chunk) {
             Ok(packet) => packet,
             Err(err) => {
-                warn!("Dropping frame: {}", err);
+                println!("Dropping frame: {}", err);
                 continue;
             }
         };
@@ -571,7 +565,7 @@ fn run_decoder_thread(
         match decoder.send_packet(&av_packet) {
             Ok(()) => {}
             Err(e) => {
-                warn!("Failed to send a packet to decoder: {}", e);
+                println!("Failed to send a packet to decoder: {}", e);
                 continue;
             }
         }
@@ -580,24 +574,22 @@ fn run_decoder_thread(
             let frame = match frame_from_av(&mut decoded_frame, &mut pts_offset) {
                 Ok(frame) => frame,
                 Err(err) => {
-                    warn!("Dropping frame: {}", err);
+                    println!("Dropping frame: {}", err);
                     continue;
                 }
             };
 
-            trace!(pts=?frame.pts, "H264 decoder produced a frame.");
+            println!("H264 decoder produced a frame.");
             if frame_sender.send(PipelineEvent::Data(frame)).is_err() {
-                debug!("Failed to send frame from H264 decoder. Channel closed.");
+                println!("Failed to send frame from H264 decoder. Channel closed.");
                 return;
             }
         }
     }
     if frame_sender.send(PipelineEvent::EOS).is_err() {
-        debug!("Failed to send EOS from H264 decoder. Channel closed.")
+        println!("Failed to send EOS from H264 decoder. Channel closed.")
     }
 }
-
-
 
 pub fn start_ffmpeg_decoder_thread(
     chunks_receiver: Receiver<PipelineEvent<EncodedChunk>>,
@@ -633,26 +625,22 @@ pub fn start_ffmpeg_decoder_thread(
     Ok(())
 }
 
-
 // ffmpeg -i /Volumes/dev/Shared/Dump/YP-1R-05x13.mkv -c:v copy -c:a copy ~/Desktop/YP-1R-05x13.mp4
 
 fn main() {
-    let (a, b) = start(Path::new("/Users/cold/Desktop/YP-1R-05x13.mp4").canonicalize().unwrap());
+    let (a, b) = start(
+        Path::new("/Users/cold/Desktop/YP-1R-05x13.mp4")
+            .canonicalize()
+            .unwrap(),
+    );
 
     for x in b.iter() {
-
         match x {
-            PipelineEvent::Data(frame) => {
-
-
-                match frame.data {
-                    FrameData::PlanarYuv420(planes) => {
-                        println!("Got frame {:?} Y {}", frame.pts, planes.y_plane[0]);
-                    }
+            PipelineEvent::Data(frame) => match frame.data {
+                FrameData::PlanarYuv420(planes) => {
+                    println!("Got frame {:?} Y {}", frame.pts, planes.y_plane[0]);
                 }
-
-
-            }
+            },
             PipelineEvent::EOS => {
                 println!("Got end of stream");
             }

@@ -1,9 +1,9 @@
 use crate::camera_controller::CameraController;
-use winit::event::{DeviceEvent, Event, WindowEvent};
+use winit::event::WindowEvent;
 
 pub fn process_camera_input(
     focused: bool,
-    event: Event<()>,
+    event: WindowEvent,
     camera_controller: &mut CameraController,
 ) {
     if !focused {
@@ -11,18 +11,14 @@ pub fn process_camera_input(
     }
 
     match event {
-        Event::WindowEvent { event, .. } => match event {
-            WindowEvent::KeyboardInput { event, .. } => {
-                camera_controller.process_keyboard(event.physical_key, event.state);
-            }
-            _ => {}
-        },
-        Event::DeviceEvent { event, .. } => match event {
-            DeviceEvent::MouseMotion { delta } => {
-                camera_controller.process_mouse(delta.0, delta.1);
-            }
-            _ => {}
-        },
+        WindowEvent::KeyboardInput { event, .. } => {
+            camera_controller.process_keyboard(event.physical_key, event.state);
+        }
+
+        WindowEvent::CursorMoved { position, .. } => {
+            println!("Mouse delta {:?}", position);
+            camera_controller.process_mouse(position.x, position.y);
+        }
         _ => {}
     }
 }
