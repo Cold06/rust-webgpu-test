@@ -1,28 +1,179 @@
 use crossbeam_channel::{Receiver, Sender};
-use decoder::{run_decoder_thread, Frame};
-use std::path::PathBuf;
-
+use decoder::{run_decoder_thread, Frame, InputInitError};
 mod decoder;
+use std::{
+    path::PathBuf,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 pub use decoder::{FrameData, MP4Command, PipelineEvent, Resolution};
 
-pub fn start_video_decoding(file: PathBuf) -> (Receiver<PipelineEvent<Frame>>, Sender<MP4Command>) {
-    let (command_sender, command_receiver) = crossbeam_channel::bounded::<MP4Command>(1);
+use crate::shared::Shared;
 
-    let (yuv_frame_sender, yuv_frame_receiver) = crossbeam_channel::bounded(1);
+pub enum VideoUpdateInfo {
+    Started,
+    Frame(f64),
+    EOS,
+}
 
-    let (init_result_sender, init_result_receiver) = crossbeam_channel::bounded(0);
+#[derive(PartialEq)]
+pub enum PlayState {
+    // Just created or stopped back to start
+    Stopped,
+    // Currently playing
+    Playing,
+    // Currently paused
+    Paused,
+    // Received EOS
+    Completed,
+}
 
-    std::thread::Builder::new()
-        .name(format!("h264 ffmpeg decoder {}", 0))
-        .spawn(move || {
-            println!("Starting FFMPEG decoder thread");
+#[derive(PartialEq)]
+pub enum PlaySpeed {
+    // User needs to press for next frame
+    Stopped,
+    // x0.25
+    Slower,
+    // x0.5
+    Slow,
+    // x1.0
+    Normal,
+    // x1.5
+    Fast,
+    // x2.0
+    Faster,
+    // The fastes the CPU can handle
+    Fastest,
+}
 
-            run_decoder_thread(file, init_result_sender, yuv_frame_sender)
+pub struct InitData {
+    fps: f64,
+    total_duration: f64,
+}
+
+pub struct VideoHandle {
+    pub fps: f64,
+    close_thread: Arc<AtomicBool>,
+    pub total_duration: f64,
+    pub progress: f64,
+    pub is_paused: bool,
+    pub play_speed: PlaySpeed,
+    play_state: PlayState,
+    command_sender: Sender<MP4Command>,
+    update_receiver: Receiver<VideoUpdateInfo>,
+    yuv_frame_receiver: Receiver<PipelineEvent<Frame>>,
+}
+
+impl Drop for VideoHandle {
+    fn drop(&mut self) {
+        self.close_thread
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+impl VideoHandle {
+    pub fn create(file: PathBuf) -> Shared<VideoHandle> {
+        let (command_sender, command_receiver) = crossbeam_channel::bounded::<MP4Command>(1);
+
+        let (update_sender, update_receiver) = crossbeam_channel::bounded::<VideoUpdateInfo>(1);
+
+        let (yuv_frame_sender, yuv_frame_receiver) = crossbeam_channel::bounded(1);
+
+        let (init_result_sender, init_result_receiver) =
+            crossbeam_channel::bounded::<Result<InitData, InputInitError>>(0);
+
+        let close_thread = Arc::new(AtomicBool::new(false));
+
+        let close_thread_clone = close_thread.clone();
+
+        std::thread::Builder::new()
+            .name(format!("h264 ffmpeg decoder {}", 0))
+            .spawn(move || {
+                println!("Starting FFMPEG decoder thread");
+
+                run_decoder_thread(
+                    file,
+                    init_result_sender,
+                    yuv_frame_sender,
+                    close_thread_clone,
+                    command_receiver,
+                    update_sender,
+                )
+            })
+            .unwrap();
+
+        // BLOCKING
+        if let Ok(data) = init_result_receiver
+            .recv()
+            .expect("Failed to read from ffmpeg thread")
+        {
+            return Shared::new(VideoHandle {
+                close_thread,
+                fps: data.fps,
+                total_duration: data.total_duration,
+                progress: 0.0,
+                is_paused: false,
+                play_state: PlayState::Stopped,
+                play_speed: PlaySpeed::Normal,
+                command_sender,
+                update_receiver,
+                yuv_frame_receiver,
+            });
+        }
+
+        panic!("Failed to create FFMPEG thred")
+    }
+}
+
+impl Shared<VideoHandle> {
+    pub fn play(&self) {
+        self.with(|this| {
+            this.play_state = PlayState::Playing;
         })
-        .unwrap();
+    }
+    pub fn pause(&self) {
+        self.with(|this| {
+            this.play_state = PlayState::Paused;
+        })
+    }
+    pub fn stop(&self) {
+        // self.with(|this| {
+        //     this.play_state = PlayState::Playing;
+        // })
+    }
+    pub fn seek(&self, to: f64) {
+        self.with(|this| {
+            this.command_sender
+                .send(MP4Command::Seek(to))
+                .expect("Sending commands should always succed")
+        });
+    }
+    pub fn sync(&self) {
+        self.with(|this| {
+            if let Ok(update) = this.update_receiver.try_recv() {
+                match update {
+                    VideoUpdateInfo::Started => {
+                        println!("Play started")
+                    }
+                    VideoUpdateInfo::Frame(f) => {
+                        this.progress = f;
+                    }
+                    VideoUpdateInfo::EOS => {
+                        println!("EOS")
+                    }
+                }
+            }
+        });
+    }
+    pub fn try_read_next_frame(&self) -> Option<PipelineEvent<Frame>> {
+        self.with(|this| {
+            // To pause, simply just don't read, this will
+            // block the sending of more frames from ffmpeg thread
+            if this.play_state != PlayState::Playing {
+                return None;
+            }
 
-    init_result_receiver.recv().unwrap().unwrap();
-
-    (yuv_frame_receiver, command_sender)
+            this.yuv_frame_receiver.try_recv().map_or(None, |e| Some(e))
+        })
+    }
 }

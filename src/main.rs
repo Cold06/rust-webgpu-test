@@ -30,10 +30,10 @@ use crate::egui_tools::EguiRenderer;
 use crate::frontend::{HandleList, TabHandle};
 use crate::gpu::{GPUCtx, GPUTexture, SView, ViewTarget};
 use crate::js::VM;
-use crate::video::{start_video_decoding, FrameData};
+use crate::video::FrameData;
 use bytemuck::{Pod, Zeroable};
 use egui::load::SizedTexture;
-use egui::{Button, Color32, ImageSource, ProgressBar, Rounding, Slider};
+use egui::{ImageSource, Slider};
 use egui_dock::{DockArea, DockState, NodeIndex, Style, SurfaceIndex};
 use egui_wgpu::wgpu::FilterMode;
 use egui_wgpu::{wgpu, ScreenDescriptor};
@@ -44,7 +44,7 @@ use shared::{Shared, WeakShared};
 use std::error::Error;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
-use video::{MP4Command, PipelineEvent};
+use video::{PipelineEvent, VideoHandle};
 use winit::{
     event::{ElementState, Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -80,7 +80,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     println!("Now playing: {:?}", video_path);
 
-    let (video_receiver, command_sender) = start_video_decoding(video_path);
+    let video_handle = VideoHandle::create(video_path);
 
     let event_loop = EventLoop::new()?;
 
@@ -207,6 +207,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     event_loop.run(|event, window_target| {
         window_target.set_control_flow(ControlFlow::Poll);
 
+        video_handle.sync();
+
         // TODO: focus management to know which view should process the inputs
 
         if use_secondary_camera {
@@ -298,7 +300,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         };
 
                         // Try to update video texture
-                        if let Ok(event) = video_receiver.try_recv() {
+                        if let Some(event) = video_handle.try_read_next_frame() {
                             match event {
                                 PipelineEvent::Data(frame) => {
                                     video_demo.check_resize(&ctx, frame.resolution);
@@ -372,43 +374,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                             } else {
                                 ui.label(format!("No focused tab"));
                             }
-
-                            let visuals = ui.visuals_mut();
-                            visuals.widgets.active.rounding = Rounding::ZERO;
-                            visuals.widgets.inactive.rounding = Rounding::ZERO;
-                            visuals.widgets.hovered.rounding = Rounding::ZERO;
-                            visuals.widgets.hovered.bg_fill = visuals.widgets.inactive.bg_fill; // Same background as inactive
-                            visuals.widgets.hovered.fg_stroke = egui::Stroke::NONE;
-                            visuals.widgets.hovered.bg_stroke = egui::Stroke::NONE;
-
-                            let spacing = ui.spacing_mut();
-                            spacing.item_spacing.x = 0.0; // Horizontal spacing
-                            spacing.item_spacing.y = 0.0;
-
-                            ui.horizontal(|ui| {
-                                let available_width = ui.available_width();
-                                let x = ["A", "B", "C", "D", "E", "F", "G", "H"];
-                                let button_width = available_width / x.len() as f32;
-
-                                let mut count = 0;
-
-                                for _ in x {
-                                    count += 1;
-
-                                    let fill = if count % 2 == 0 {
-                                        Color32::RED
-                                    } else {
-                                        Color32::BLUE
-                                    };
-
-                                    ui.add_sized([button_width, 10.0], Button::new("").fill(fill));
-                                }
-                            });
-
-                            ui.horizontal(|ui| {
-                                let available_width = ui.available_width();
-                                ui.add_sized([available_width, 20.0], ProgressBar::new(0.2));
-                            });
                         });
 
                         {
@@ -492,28 +457,58 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 }
                             });
 
-                            let value = command_sender.clone();
+                            let value = video_handle.clone();
 
                             video_view.ui(move |ui: &mut egui::Ui| {
+                                let mut prog = value.with(|video| {
+                                    ui.label(format!("Movie avg framerate: {:.2}FPS", video.fps));
+                                    ui.label(format!(
+                                        "Movie length: {:.2}ms",
+                                        video.total_duration
+                                    ));
+                                    ui.label(format!("Movie progress: {:.2}ms", video.progress));
+                                    ui.label(format!(
+                                        "Movie norm: {:.8}",
+                                        video.progress / video.total_duration
+                                    ));
+
+                                    video.progress / video.total_duration
+                                });
+
                                 if ui.button("Pause").clicked() {
-                                    let _ = value.try_send(MP4Command::Pause);
+                                    value.pause();
+                                    // let _ = value.try_send(MP4Command::Pause);
                                 }
                                 if ui.button("Play").clicked() {
-                                    let _ = value.try_send(MP4Command::Play);
+                                    value.play();
+                                    // let _ = value.try_send(MP4Command::Play);
                                 }
                                 if ui.button("Stop").clicked() {
-                                    let _ = value.try_send(MP4Command::Stop);
+                                    value.stop();
+                                    // let _ = value.try_send(MP4Command::Stop);
                                 }
                                 if ui.button("SkipForward").clicked() {
-                                    let _ = value.try_send(MP4Command::SkipForward);
+                                    // let _ = value.try_send(MP4Command::SkipForward);
                                 }
                                 if ui.button("SkipBackward").clicked() {
-                                    let _ = value.try_send(MP4Command::SkipBackward);
+                                    // let _ = value.try_send(MP4Command::SkipBackward);
                                 }
                                 if ui.button("Seek(Duration)").clicked() {
-                                    let _ =
-                                        value.try_send(MP4Command::Seek(Duration::from_millis(0)));
+                                    // let _ =
+                                    //     value.try_send(MP4Command::Seek(Duration::from_millis(0)));
                                 }
+
+                                ui.horizontal(|ui| {
+                                    let available_width = ui.available_width();
+
+                                    ui.spacing_mut().slider_width = available_width;
+
+                                    ui.add(
+                                        Slider::new(&mut prog, 0.0..=1.0)
+                                            .step_by(0.001)
+                                            .show_value(false),
+                                    );
+                                });
                             });
 
                             egui_renderer.end_frame_and_draw(
