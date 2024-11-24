@@ -172,9 +172,11 @@ impl ApplicationHack {
         let mut chunk_manager_view = frontend::QuickView::new();
         let mut video_view = frontend::QuickView::new();
         let code_editor_view = frontend::CodeView::new();
+        let mut profiler_view = frontend::QuickView::new();
 
         let mut dock_state = DockState::new(vec![
             stats_view.as_tab_handle(SurfaceIndex::main(), NodeIndex(1)), // canvas_example_view.as_tab_handle(SurfaceIndex::main(), NodeIndex(1)),
+            profiler_view.as_tab_handle(SurfaceIndex::main(), NodeIndex(2)),
         ]);
 
         {
@@ -182,7 +184,7 @@ impl ApplicationHack {
                 NodeIndex::root(),
                 0.5,
                 vec![
-                    video_view.as_tab_handle(SurfaceIndex::main(), NodeIndex(4)),
+                    video_view.as_tab_handle(SurfaceIndex::main(), NodeIndex(3)),
                     // code_editor_view.as_tab_handle(SurfaceIndex::main(), NodeIndex(6)),
                     // stats_view.as_tab_handle(SurfaceIndex::main(), NodeIndex(8)),
                 ],
@@ -191,7 +193,7 @@ impl ApplicationHack {
             dock_state.main_surface_mut().split_left(
                 b,
                 0.50,
-                vec![world_view1.as_tab_handle(SurfaceIndex::main(), NodeIndex(0))],
+                vec![world_view1.as_tab_handle(SurfaceIndex::main(), NodeIndex(4))],
             );
 
             // let [_, _] = dock_state.main_surface_mut().split_below(
@@ -214,6 +216,8 @@ impl ApplicationHack {
         Self {
             os_window: os_window.clone(),
             boxed_fn: Box::new(move |event_loop, window_id, event| {
+                puffin::profile_function!();
+
                 video_handle.sync();
 
                 if use_secondary_camera {
@@ -273,6 +277,10 @@ impl ApplicationHack {
                         // }
                     }
                     WindowEvent::RedrawRequested => {
+                        puffin::GlobalProfiler::lock().new_frame();
+
+                        puffin::profile_scope!("Total Frame Time");
+
                         // Compute Delta
                         let now = Instant::now();
                         let delta = now - last_frame;
@@ -291,12 +299,15 @@ impl ApplicationHack {
                             video_demo.update_location(&ctx, transform);
                         });
 
-                        // Get Surface Texture
-                        let frame = match os_window.borrow().surface.get_current_texture() {
-                            Ok(frame) => frame,
-                            Err(e) => {
-                                eprintln!("dropped frame: {e:?}");
-                                return;
+                        let frame = {
+                            puffin::profile_scope!("Get current texture (Blocks due to VSync)");
+                            // Get Surface Texture
+                            match os_window.borrow().surface.get_current_texture() {
+                                Ok(frame) => frame,
+                                Err(e) => {
+                                    eprintln!("dropped frame: {e:?}");
+                                    return;
+                                }
                             }
                         };
 
@@ -329,6 +340,7 @@ impl ApplicationHack {
                             |camera: &Camera,
                              color_view: &wgpu::TextureView,
                              depth_view: &wgpu::TextureView| {
+                                puffin::profile_scope!("Render pass");
                                 let mut encoder =
                                     ctx.device.create_command_encoder(&Default::default());
                                 {
@@ -521,6 +533,10 @@ impl ApplicationHack {
                                 }
                             });
 
+                            profiler_view.ui(|ui| {
+                                puffin_egui::profiler_ui(ui);
+                            });
+
                             egui_renderer.end_frame_and_draw(
                                 &ctx.device,
                                 &ctx.queue,
@@ -544,7 +560,7 @@ impl ApplicationHack {
                         frame.present();
                     }
                     _ => {}
-                }
+                };
             }),
         }
     }
@@ -575,6 +591,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
 
     ffmpeg_next::init().unwrap();
+
+    puffin::set_scopes_on(true);
 
     let event_loop = EventLoop::new()?;
 

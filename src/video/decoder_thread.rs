@@ -9,6 +9,8 @@ use std::{
     time::Duration,
 };
 
+use crate::{thread_utils::custom_beams::LooseSender, video::PlaySpeed};
+
 use super::{InitData, MP4Command, VideoUpdateInfo};
 
 #[derive(Debug)]
@@ -91,7 +93,7 @@ fn frame_from_ffmpeg(decoded: &mut frame::Video) -> Result<Frame, DecoderFrameCo
 pub fn run_decoder_thread(
     file: PathBuf,
     init_result_sender: Sender<Result<InitData, InputInitError>>,
-    frame_sender: Sender<PipelineEvent<Frame>>,
+    frame_sender: LooseSender<PipelineEvent<Frame>>,
     close_thread: Arc<AtomicBool>,
     command_receiver: Receiver<MP4Command>,
     update_sender: Sender<VideoUpdateInfo>,
@@ -156,6 +158,8 @@ pub fn run_decoder_thread(
         let should_stop = || close_thread.load(Ordering::Relaxed);
 
         loop {
+            puffin::profile_scope!("Video Packet Processing");
+
             if should_stop() {
                 return;
             }
@@ -167,6 +171,8 @@ pub fn run_decoder_thread(
             let mut seek_to: Option<i64> = None;
             let mut seek_target: Option<f64> = None;
 
+            let speed = PlaySpeed::Normal;
+
             if let Some((stream, packet)) = iter.next() {
                 if stream.index() == video_stream_index {
                     decoder
@@ -176,6 +182,7 @@ pub fn run_decoder_thread(
                     let mut decoded = ffmpeg_next::util::frame::video::Video::empty();
 
                     while decoder.receive_frame(&mut decoded).is_ok() {
+                        puffin::profile_scope!("Frame Receive");
                         if should_stop() {
                             break;
                         }
@@ -191,25 +198,30 @@ pub fn run_decoder_thread(
                         let time_base_den =
                             time_sabe.denominator() as f64 / time_sabe.numerator() as f64;
 
-                        println!(
-                            "PTS {} Dur {:.2}",
-                            decoded.pts().unwrap(),
-                            decoded.pts().unwrap() as f64 / time_base_den
-                        );
+                        // println!(
+                        //     "PTS {} Dur {:.2}",
+                        //     decoded.pts().unwrap(),
+                        //     decoded.pts().unwrap() as f64 / time_base_den
+                        // );
 
                         drop(update_sender.try_send(VideoUpdateInfo::Frame(
                             decoded.pts().unwrap() as f64 / time_base_den,
                         )));
 
-                        if frame_sender.send(PipelineEvent::Data(frame)).is_err() {
+                        if frame_sender.loosely_send(PipelineEvent::Data(frame)).is_err() {
                             return;
                         }
 
                         let frame_duration = decoded.packet().duration;
 
-                        let frame_duration_ms = time_base_den as f64 / frame_duration as f64;
+                        if speed == PlaySpeed::Fastest {
 
-                        std::thread::sleep(Duration::from_secs_f64(frame_duration_ms / 1000.0));
+                        } else {
+                            let frame_duration_ms = time_base_den as f64 / frame_duration as f64;
+    
+                            std::thread::sleep(Duration::from_secs_f64(frame_duration_ms / 1000.0));
+                        }
+
 
                         if let Ok(command) = command_receiver.try_recv() {
                             match command {

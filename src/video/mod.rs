@@ -51,19 +51,19 @@ pub enum PlayState {
 
 #[derive(PartialEq)]
 pub enum PlaySpeed {
-    // User needs to press for next frame
+    /// User needs to press for next frame
     Stopped,
-    // x0.25
+    /// x0.25
     Slower,
-    // x0.5
+    /// x0.5
     Slow,
-    // x1.0
+    /// x1.0
     Normal,
-    // x1.5
+    /// x1.5
     Fast,
-    // x2.0
+    /// x2.0
     Faster,
-    // The fastes the CPU can handle
+    /// The fastes the CPU can handle
     Fastest,
 }
 
@@ -97,7 +97,7 @@ impl VideoHandle {
 
         let (update_sender, update_receiver) = crossbeam_channel::bounded::<VideoUpdateInfo>(1);
 
-        let (yuv_frame_sender, yuv_frame_receiver) = crossbeam_channel::bounded(1);
+        let (yuv_frame_sender, yuv_frame_receiver) = custom_beams::loose(1);
 
         let (init_result_sender, init_result_receiver) =
             crossbeam_channel::bounded::<Result<InitData, InputInitError>>(0);
@@ -107,7 +107,6 @@ impl VideoHandle {
         let close_thread_clone = close_thread.clone();
 
         std::thread::Builder::new()
-            .name(format!("h264 ffmpeg decoder {}", 0))
             .spawn(move || {
                 println!("Starting FFMPEG decoder thread");
 

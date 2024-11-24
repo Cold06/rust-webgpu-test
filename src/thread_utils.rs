@@ -43,7 +43,6 @@ pub mod custom_beams {
                 Ok(_) => Ok(()),
                 Err(TrySendError::Full(data)) => {
                     drop(self.dropper.try_recv());
-
                     self.sender.try_send(data)
                 }
                 Err(TrySendError::Disconnected(data)) => Err(TrySendError::Disconnected(data)),
