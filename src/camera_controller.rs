@@ -1,12 +1,23 @@
 use crate::camera::Camera;
-use cgmath::num_traits::clamp;
+use glam::*;
 use std::f32::consts::FRAC_PI_2;
 use std::time::Duration;
 use winit::event::*;
 use winit::keyboard::{KeyCode, PhysicalKey};
-use glam::*;
 
 const SAFE_FRAC_PI_2: f32 = FRAC_PI_2 - 0.0001;
+
+#[inline]
+pub fn clamp<T: PartialOrd>(input: T, min: T, max: T) -> T {
+    debug_assert!(min <= max, "min must be less than or equal to max");
+    if input < min {
+        min
+    } else if input > max {
+        max
+    } else {
+        input
+    }
+}
 
 #[derive(Debug)]
 pub struct CameraController {

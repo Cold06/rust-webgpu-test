@@ -57,3 +57,6 @@ This will be the easy part, the hard part will be building the shape and motion 
 The face control rig will probably take 1/4 of that tine.
 
 
+``` 
+cargo build --profile profiling && ./target/profiling/pony-renderer
+``` 
