@@ -304,6 +304,8 @@ impl Shared<VideoHandle> {
             this.last_update = now;
             this.current_timestamp += delta;
 
+            // Frame dropping is being expensive, move it to the decoder thread thread
+
             loop {
                 if let Some(ref frame) = this.next_frame {
                     if this.current_timestamp < frame.pts {
