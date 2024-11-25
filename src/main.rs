@@ -218,7 +218,7 @@ impl ApplicationHack {
             boxed_fn: Box::new(move |event_loop, window_id, event| {
                 puffin::profile_function!();
 
-                video_handle.sync();
+                video_handle.tick();
 
                 if use_secondary_camera {
                     world_view1.with(|view| {
@@ -312,24 +312,17 @@ impl ApplicationHack {
                         };
 
                         // Try to update video texture
-                        if let Some(event) = video_handle.try_read_next_frame() {
-                            match event {
-                                PipelineEvent::Data(frame) => {
-                                    video_demo.check_resize(&ctx, frame.resolution);
+                        if let Some(new_frame) = video_handle.get_current_frame() {
+                            video_demo.check_resize(&ctx, new_frame.resolution);
 
-                                    match frame.data {
-                                        FrameData::PlanarYuv420(planes) => {
-                                            video_demo.update_texture(
-                                                &ctx,
-                                                &planes.y_plane,
-                                                &planes.u_plane,
-                                                &planes.v_plane,
-                                            );
-                                        }
-                                    }
-                                }
-                                PipelineEvent::EOS => {
-                                    println!("Got end of stream");
+                            match new_frame.data {
+                                FrameData::PlanarYuv420(planes) => {
+                                    video_demo.update_texture(
+                                        &ctx,
+                                        &planes.y_plane,
+                                        &planes.u_plane,
+                                        &planes.v_plane,
+                                    );
                                 }
                             }
                         }

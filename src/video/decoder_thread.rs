@@ -1,17 +1,15 @@
 use crossbeam_channel::{Receiver, Sender};
-use ffmpeg_next::{format, frame};
+use ffmpeg_next::{format, frame, Rational};
 use std::{
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
-    time::{Duration, Instant},
+    time::Duration,
 };
 
-use crate::{thread_utils::custom_beams::LooseSender, video::PlaySpeed};
-
-use super::{InitData, MP4Command, VideoUpdateInfo};
+use super::{InitData, SeekCommand};
 
 #[derive(Debug)]
 pub enum PipelineEvent<T> {
@@ -71,7 +69,10 @@ fn copy_plane_from_av(decoded: &frame::Video, plane: usize) -> bytes::Bytes {
     output_buffer.freeze()
 }
 
-fn frame_from_ffmpeg(decoded: &mut frame::Video) -> Result<Frame, DecoderFrameConversionError> {
+fn frame_from_ffmpeg(
+    decoded: &mut frame::Video,
+    time_base: Rational,
+) -> Result<Frame, DecoderFrameConversionError> {
     let data = match decoded.format() {
         format::Pixel::YUV420P => FrameData::PlanarYuv420(YuvPlanes {
             y_plane: copy_plane_from_av(decoded, 0),
@@ -80,72 +81,60 @@ fn frame_from_ffmpeg(decoded: &mut frame::Video) -> Result<Frame, DecoderFrameCo
         }),
         fmt => return Err(DecoderFrameConversionError::UnsupportedPixelFormat(fmt)),
     };
+
+    let pts = decoded.pts().unwrap();
+
+    let pts: Duration = if pts != 0 {
+        let pts_in_time_base = pts as f64 / time_base.denominator() as f64;
+        Duration::from_secs_f64(pts_in_time_base)
+    } else {
+        Duration::from_secs_f64(0.0)
+    };
+
     Ok(Frame {
         data,
         resolution: Resolution {
             width: decoded.width().try_into().unwrap(),
             height: decoded.height().try_into().unwrap(),
         },
-        pts: Duration::from_millis(0),
+        pts,
     })
 }
 
 pub fn run_decoder_thread(
     file: PathBuf,
     init_result_sender: Sender<Result<InitData, InputInitError>>,
-    frame_sender: LooseSender<PipelineEvent<Frame>>,
+    frame_sender: Sender<PipelineEvent<Frame>>,
     close_thread: Arc<AtomicBool>,
-    command_receiver: Receiver<MP4Command>,
-    update_sender: LooseSender<VideoUpdateInfo>,
+    command_receiver: Receiver<SeekCommand>,
 ) {
     if let Ok(mut ictx) = ffmpeg_next::format::input(&file) {
-        let (
-            time_base_as_f64,
-            total_duration,
-            params,
-            video_stream_index,
-            avg_frame_rate,
-            start_time,
-            duration,
-        ) = {
+        let (params, video_stream_index, avg_frame_rate, total_duration) = {
             let input = ictx
                 .streams()
                 .best(ffmpeg_next::media::Type::Video)
                 .ok_or(ffmpeg_next::Error::StreamNotFound)
                 .expect("No stream found");
+
             let video_stream_index = input.index();
 
             let time_sabe = input.time_base();
-            let time_base_as_f64: f64 = time_sabe.into();
             let time_base_den = time_sabe.denominator() as f64 / time_sabe.numerator() as f64;
-
-            let start_time = input.start_time();
-
-            let duration = input.duration() as f64 / time_base_den;
+            let total_duration = input.duration() as f64 / time_base_den;
 
             let params = input.parameters();
 
             let avg_frame_rate = input.avg_frame_rate();
 
-            (
-                time_base_as_f64,
-                input.duration(),
-                params,
-                video_stream_index,
-                avg_frame_rate,
-                start_time,
-                duration,
-            )
+            (params, video_stream_index, avg_frame_rate, total_duration)
         };
 
         init_result_sender
             .send(Ok(InitData {
                 fps: avg_frame_rate.into(),
-                total_duration: duration,
+                total_duration,
             }))
             .unwrap();
-
-        println!("Start Time {}", start_time);
 
         let context_decoder = ffmpeg_next::codec::context::Context::from_parameters(params.clone())
             .expect("Failed to build context");
@@ -166,14 +155,7 @@ pub fn run_decoder_thread(
 
             let mut iter = ictx.packets();
 
-            let speed_scalar = 1.0;
-
             let mut seek_to: Option<i64> = None;
-            let mut seek_target: Option<f64> = None;
-
-            let speed = PlaySpeed::Normal;
-
-            let mut last = Instant::now();
 
             if let Some((stream, packet)) = iter.next() {
                 if stream.index() == video_stream_index {
@@ -189,88 +171,37 @@ pub fn run_decoder_thread(
                             break;
                         }
 
-                        let frame = match frame_from_ffmpeg(&mut decoded) {
+                        let time_sabe = stream.time_base();
+
+                        let frame = match frame_from_ffmpeg(&mut decoded, time_sabe) {
                             Ok(frame) => frame,
                             Err(_) => {
                                 continue;
                             }
                         };
 
-                        let time_sabe = stream.time_base();
-                        let time_base_den =
-                            time_sabe.denominator() as f64 / time_sabe.numerator() as f64;
-
-                        // println!(
-                        //     "PTS {} Dur {:.2}",
-                        //     decoded.pts().unwrap(),
-                        //     decoded.pts().unwrap() as f64 / time_base_den
-                        // );
-
-                        drop(update_sender.loosely_send(VideoUpdateInfo::Frame(
-                            decoded.pts().unwrap() as f64 / time_base_den,
-                        )));
-
-                        if frame_sender.loosely_send(PipelineEvent::Data(frame)).is_err() {
+                        if frame_sender.send(PipelineEvent::Data(frame)).is_err() {
                             return;
                         }
 
-                        let frame_duration = decoded.packet().duration;
-
-                        let frame_duration_ms = time_base_den as f64 / frame_duration as f64;
-
-                        std::thread::sleep(Duration::from_secs_f64(frame_duration_ms / 1000.0));
-
                         if let Ok(command) = command_receiver.try_recv() {
                             match command {
-                                MP4Command::Seek(value) => {
-                                    let dur = stream.duration();
-                                    let num = stream.frames();
-                                    let fps: f64 = stream.avg_frame_rate().into();
-                                    let time_base = stream.time_base();
-                                    let start_time = stream.start_time();
-
-                                    // println!("\t duration: {}", dur);
-                                    // println!("\t num: {}", num);
-                                    // println!("\t fps: {}", fps);
-                                    // println!("\t time_base: {}", time_base);
-                                    // println!("\t start_time: {}", start_time);
-
-                                    let target = (num as f64 / 2.0).ceil() as i64;
-                                    let target_sec = target as f64 / fps;
-                                    let target_timestamp =
-                                        (target_sec / f64::from(time_base)) as i64 + start_time;
-
-                                    // println!("\t target: {}", target);
-                                    // println!("\t target_sec: {}", target_sec);
-                                    // println!("\t target_timestamp: {}", target_timestamp);
-
+                                SeekCommand::Seek(value) => {
                                     seek_to = Some(
                                         (stream.duration() as f64 * 62.29626645645534 * value)
                                             .round() as i64,
                                     );
-
                                     decoder.flush();
                                     break;
                                 }
                                 _ => {}
                             }
                         }
-
-                        // frame_idx += 1;
-                        // if frame_idx >= 100 {
-                        //     let seek_to = 6000_0000;
-                        //     frame_idx = 0;
-                        //     println!("Seeking to {seek_to}");
-                        //     ictx.seek(seek_to, ..seek_to).unwrap();
-
-                        //     break;
-                        // }
                     }
 
                     if let Some(seek_to) = seek_to.take() {
-                        println!("Seeking to {seek_to}");
-                        ictx.seek(seek_to, (seek_to - 1000000)..(seek_to + 1000000))
-                            .unwrap();
+                        let seek_range = (seek_to - 1000000)..(seek_to + 1000000);
+                        ictx.seek(seek_to, seek_range).unwrap();
                     }
 
                     if should_stop() {
