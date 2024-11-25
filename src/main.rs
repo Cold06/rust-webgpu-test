@@ -179,8 +179,8 @@ impl ApplicationHack {
         let mut profiler_view = frontend::QuickView::new();
 
         let mut dock_state = DockState::new(vec![
-            stats_view.as_tab_handle(SurfaceIndex::main(), NodeIndex(1)), // canvas_example_view.as_tab_handle(SurfaceIndex::main(), NodeIndex(1)),
             profiler_view.as_tab_handle(SurfaceIndex::main(), NodeIndex(2)),
+            stats_view.as_tab_handle(SurfaceIndex::main(), NodeIndex(1)), // canvas_example_view.as_tab_handle(SurfaceIndex::main(), NodeIndex(1)),
         ]);
 
         {
@@ -522,6 +522,14 @@ impl ApplicationHack {
                                     .map(|t| FancyDuration(t))
                                     .unwrap_or(FancyDuration(Duration::from_millis(0)));
 
+                                ui.label(format!(
+                                    "Frame PTS: {}",
+                                    value
+                                        .get_frame_pts()
+                                        .map(|t| FancyDuration(t))
+                                        .unwrap_or(FancyDuration(Duration::from_millis(0)))
+                                ));
+
                                 value.with(|video| {
                                     if new_prog == prog {
                                         ui.label(format!(
@@ -551,15 +559,21 @@ impl ApplicationHack {
                                 ui.add_space(12.0);
 
                                 ui.label(format!(
+                                    "Last frame decode latency {}",
+                                    value
+                                        .get_last_decode_cost()
+                                        .map(|t| FancyDuration(t))
+                                        .unwrap_or(FancyDuration(Duration::from_millis(0)))
+                                ));
+
+                                ui.label(format!(
                                     "Realtime PTS {}",
                                     FancyDuration(value.get_pts())
                                 ));
+
                                 ui.label(format!(
-                                    "Frame PTS: {}",
-                                    value
-                                        .get_frame_pts()
-                                        .map(|t| FancyDuration(t))
-                                        .unwrap_or(FancyDuration(Duration::from_millis(0)))
+                                    "Realtime PTS {}",
+                                    FancyDuration(value.get_pts())
                                 ));
 
                                 ui.label(format!("Dropped Frames: {}", value.get_dropped_frames()));

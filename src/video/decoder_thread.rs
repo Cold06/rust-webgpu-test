@@ -6,7 +6,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use super::{InitData, SeekCommand};
@@ -42,6 +42,7 @@ pub struct Frame {
     pub resolution: Resolution,
     #[allow(unused)]
     pub pts: Duration,
+    pub decode_cost: Duration,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -73,6 +74,7 @@ fn copy_plane_from_av(decoded: &frame::Video, plane: usize) -> bytes::Bytes {
 fn frame_from_ffmpeg(
     decoded: &mut frame::Video,
     time_base: Rational,
+    decode_start: Instant,
 ) -> Result<Frame, DecoderFrameConversionError> {
     let data = match decoded.format() {
         format::Pixel::YUV420P => FrameData::PlanarYuv420(YuvPlanes {
@@ -92,6 +94,8 @@ fn frame_from_ffmpeg(
         Duration::from_secs_f64(0.0)
     };
 
+    let decode_end = Instant::now();
+
     Ok(Frame {
         data,
         resolution: Resolution {
@@ -99,6 +103,7 @@ fn frame_from_ffmpeg(
             height: decoded.height().try_into().unwrap(),
         },
         pts,
+        decode_cost: decode_end - decode_start,
     })
 }
 
@@ -158,6 +163,7 @@ pub fn run_decoder_thread(
 
             let mut seek_to: Option<i64> = None;
 
+            let decode_start = Instant::now();
             if let Some((stream, packet)) = iter.next() {
                 if stream.index() == video_stream_index {
                     decoder
@@ -174,7 +180,7 @@ pub fn run_decoder_thread(
 
                         let time_sabe = stream.time_base();
 
-                        let frame = match frame_from_ffmpeg(&mut decoded, time_sabe) {
+                        let frame = match frame_from_ffmpeg(&mut decoded, time_sabe, decode_start) {
                             Ok(frame) => frame,
                             Err(_) => {
                                 continue;

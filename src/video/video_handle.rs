@@ -9,7 +9,8 @@ use std::{
 use crate::{
     shared::Shared,
     thread_utils::custom_beams::{self, LooseSender},
-    video::{run_decoder_thread, InputInitError}, BENCHMARK_MODE,
+    video::{run_decoder_thread, InputInitError},
+    BENCHMARK_MODE,
 };
 
 use super::{Frame, PipelineEvent};
@@ -73,6 +74,7 @@ pub struct VideoHandle {
     queued_frame: Option<Frame>,
     last_update: Instant,
     current_timestamp: Duration,
+    last_decode_cost: Option<Duration>,
     frame_timestamp: Option<Duration>,
     eos: bool,
 }
@@ -129,6 +131,7 @@ impl VideoHandle {
                 queued_frame: None,
                 frame_timestamp: None,
                 current_timestamp: Duration::from_millis(0),
+                last_decode_cost: None,
                 eos: false,
             });
         }
@@ -169,6 +172,10 @@ impl Shared<VideoHandle> {
             }
             None
         })
+    }
+
+    pub fn get_last_decode_cost(&self) -> Option<Duration> {
+        self.with_ref(|this| this.last_decode_cost)
     }
 
     pub fn get_frame_progress(&self) -> Option<f64> {
@@ -308,25 +315,46 @@ impl Shared<VideoHandle> {
             // Frame dropping is being expensive, move it to the decoder thread thread
 
             loop {
+                // Next frame is in the future
+                // we can grab it inext farme
                 if let Some(ref frame) = this.next_frame {
-                    if this.current_timestamp < frame.pts {
+                    if frame.pts > this.current_timestamp {
                         break;
                     }
                 }
 
+                // Otherwise, the current frame sould be enqueued
+                // We will check it again next iteration, until we 
+                // find a valid frame
+
                 let queued_frame = this.next_frame.take();
 
+                // We took the frame, but there was already one equeued.
+                // This happens in two cases:
+                // * We are currently draining many old frames
+                // * There was a FPS drop on the render thread
+                // * And the PTS advanced too much, so many frames are
+                // enqueed but not presented in this loop.
                 if this.queued_frame.is_some() {
                     this.dropped_frames += 1;
                 }
                 this.queued_frame = queued_frame;
 
+                // Update metadata
                 if let Some(ref frame) = this.queued_frame {
                     this.frame_timestamp = Some(frame.pts);
+                    this.last_decode_cost = Some(frame.decode_cost);
                 }
 
+                // Set next frame
                 this.next_frame = take_one_frame();
                 this.eos = this.next_frame.is_none();
+
+                // There isn't a new frame, break
+                // and leave processing for the next tick instead.
+                if this.eos {
+                    break;
+                }
             }
         });
     }
