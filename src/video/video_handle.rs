@@ -9,7 +9,7 @@ use std::{
 use crate::{
     shared::Shared,
     thread_utils::custom_beams::{self, LooseSender},
-    video::{run_decoder_thread, InputInitError},
+    video::{run_decoder_thread, InputInitError}, BENCHMARK_MODE,
 };
 
 use super::{Frame, PipelineEvent};
@@ -88,7 +88,8 @@ impl VideoHandle {
     pub fn create(file: PathBuf) -> Shared<VideoHandle> {
         let (command_sender, command_receiver) = custom_beams::loose::<SeekCommand>(1);
 
-        let (yuv_frame_sender, yuv_frame_receiver) = crossbeam_channel::bounded(16);
+        let (yuv_frame_sender, yuv_frame_receiver) =
+            crossbeam_channel::bounded(if BENCHMARK_MODE { 512 } else { 16 });
 
         let (init_result_sender, init_result_receiver) =
             crossbeam_channel::bounded::<Result<InitData, InputInitError>>(0);

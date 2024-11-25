@@ -1,4 +1,4 @@
-use crate::gpu::GPUCtx;
+use crate::{gpu::GPUCtx, BENCHMARK_MODE};
 use egui_wgpu::wgpu;
 use winit::dpi::PhysicalSize;
 
@@ -25,7 +25,11 @@ pub fn get_surface_configuration(size: PhysicalSize<u32>) -> wgpu::SurfaceConfig
         format: wgpu::TextureFormat::Bgra8UnormSrgb,
         width: size.width,
         height: size.height,
-        present_mode: wgpu::PresentMode::AutoVsync,
+        present_mode: if BENCHMARK_MODE {
+            wgpu::PresentMode::AutoNoVsync
+        } else {
+            wgpu::PresentMode::AutoVsync
+        },
         desired_maximum_frame_latency: 1,
         alpha_mode: wgpu::CompositeAlphaMode::Auto,
         view_formats: vec![wgpu::TextureFormat::Bgra8Unorm],

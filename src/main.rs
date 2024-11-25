@@ -60,6 +60,8 @@ use winit::{
     window::CursorGrabMode,
 };
 
+pub const BENCHMARK_MODE: bool = true;
+
 #[repr(C)]
 #[derive(Pod, Copy, Clone, Zeroable)]
 struct Filler0(u8, u8, u8, u8);
