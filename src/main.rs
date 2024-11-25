@@ -1,3 +1,4 @@
+#![feature(duration_millis_float)]
 #![feature(const_option)]
 
 mod camera;
@@ -34,10 +35,11 @@ use crate::js::VM;
 use crate::video::FrameData;
 use bytemuck::{Pod, Zeroable};
 use egui::load::SizedTexture;
-use egui::{ImageSource, Slider};
+use egui::{ImageSource, ProgressBar, Slider};
 use egui_dock::{DockArea, DockState, NodeIndex, Style, SurfaceIndex};
 use egui_wgpu::wgpu::FilterMode;
 use egui_wgpu::{wgpu, ScreenDescriptor};
+use fancy_duration::FancyDuration;
 use frontend::{TabView, WorldView};
 use fs_utils::get_random_file_from_directory;
 use winit::application::ApplicationHandler;
@@ -48,7 +50,7 @@ use shared::{Shared, WeakShared};
 use std::error::Error;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
-use video::{PipelineEvent, VideoHandle};
+use video::VideoHandle;
 use window::OSWindow;
 use winit::window::WindowId;
 use winit::{
@@ -466,44 +468,41 @@ impl ApplicationHack {
                             let value = video_handle.clone();
 
                             video_view.ui(move |ui: &mut egui::Ui| {
-                                let prog = value.with(|video| {
+                                value.with(|video| {
                                     ui.label(format!("Movie avg framerate: {:.2}FPS", video.fps));
-                                    ui.label(format!(
-                                        "Movie length: {:.2}ms",
-                                        video.total_duration
-                                    ));
-                                    ui.label(format!("Movie progress: {:.2}ms", video.progress));
-                                    ui.label(format!(
-                                        "Movie norm: {:.8}",
-                                        video.progress / video.total_duration
-                                    ));
 
-                                    video.progress / video.total_duration
+                                    ui.label(format!(
+                                        "Movie length: {}",
+                                        FancyDuration(video.total_duration)
+                                    ));
                                 });
 
-                                if ui.button("Pause").clicked() {
-                                    value.pause();
-                                    // let _ = value.try_send(MP4Command::Pause);
-                                }
-                                if ui.button("Play").clicked() {
-                                    value.play();
-                                    // let _ = value.try_send(MP4Command::Play);
-                                }
-                                if ui.button("Stop").clicked() {
-                                    value.stop();
-                                    // let _ = value.try_send(MP4Command::Stop);
-                                }
-                                if ui.button("SkipForward").clicked() {
-                                    // let _ = value.try_send(MP4Command::SkipForward);
-                                }
-                                if ui.button("SkipBackward").clicked() {
-                                    // let _ = value.try_send(MP4Command::SkipBackward);
-                                }
-                                if ui.button("Seek(Duration)").clicked() {
-                                    // let _ =
-                                    //     value.try_send(MP4Command::Seek(Duration::from_millis(0)));
-                                }
+                                ui.horizontal(|ui| {
+                                    if ui.button("Pause").clicked() {
+                                        value.pause();
+                                        // let _ = value.try_send(MP4Command::Pause);
+                                    }
+                                    if ui.button("Play").clicked() {
+                                        value.play();
+                                        // let _ = value.try_send(MP4Command::Play);
+                                    }
+                                    if ui.button("Stop").clicked() {
+                                        value.stop();
+                                        // let _ = value.try_send(MP4Command::Stop);
+                                    }
+                                    if ui.button("SkipForward").clicked() {
+                                        // let _ = value.try_send(MP4Command::SkipForward);
+                                    }
+                                    if ui.button("SkipBackward").clicked() {
+                                        // let _ = value.try_send(MP4Command::SkipBackward);
+                                    }
+                                    if ui.button("Seek(Duration)").clicked() {
+                                        // let _ =
+                                        //     value.try_send(MP4Command::Seek(Duration::from_millis(0)));
+                                    }
+                                });
 
+                                let prog = value.get_realtime_progress();
                                 let mut new_prog = prog;
 
                                 ui.horizontal(|ui| {
@@ -514,16 +513,61 @@ impl ApplicationHack {
                                     ui.add(Slider::new(&mut new_prog, 0.0..=1.0).show_value(false))
                                 });
 
-                                ui.label(format!("new_prog: {:.6}", new_prog));
-                                ui.label(format!("prog: {:.6}", prog));
+                                let mut seek_target = None;
 
-                                if new_prog == prog {
-                                    ui.label(format!("OK: {:.6}", prog - new_prog));
-                                } else {
-                                    value.seek(new_prog);
+                                let current = value
+                                    .get_next_pts()
+                                    .map(|t| FancyDuration(t))
+                                    .unwrap_or(FancyDuration(Duration::from_millis(0)));
 
-                                    ui.label(format!("CHANGING: {:.6}", prog - new_prog));
+                                value.with(|video| {
+                                    if new_prog == prog {
+                                        ui.label(format!(
+                                            "Current Time: {}",
+                                            FancyDuration(video.total_duration.mul_f64(prog))
+                                        ));
+
+                                        ui.label(format!("Next Frame: {}", current));
+                                    } else {
+                                        let new_duration = video.total_duration.mul_f64(new_prog);
+
+                                        ui.label(format!(
+                                            "Seek Target: {}",
+                                            FancyDuration(new_duration)
+                                        ));
+
+                                        ui.label(format!("Next Frame: None"));
+
+                                        seek_target = Some(new_duration);
+                                    }
+                                });
+
+                                if let Some(seek_target) = seek_target.take() {
+                                    value.seek(seek_target);
                                 }
+
+                                ui.add_space(12.0);
+
+                                ui.label(format!(
+                                    "Realtime PTS {}",
+                                    FancyDuration(value.get_pts())
+                                ));
+                                ui.label(format!(
+                                    "Frame PTS: {}",
+                                    value
+                                        .get_frame_pts()
+                                        .map(|t| FancyDuration(t))
+                                        .unwrap_or(FancyDuration(Duration::from_millis(0)))
+                                ));
+
+                                ui.label(format!("Dropped Frames: {}", value.get_dropped_frames()));
+
+                                let (len, cap) = value.get_buffer_size();
+                                let health = value.get_buffer_health();
+
+                                ui.label(format!("Buffer Health: {len}/{cap}"));
+
+                                ui.add(ProgressBar::new(health as f32));
                             });
 
                             profiler_view.ui(|ui| {

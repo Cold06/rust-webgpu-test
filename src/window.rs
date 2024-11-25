@@ -1,11 +1,11 @@
+use crate::gpu::GPUCtx;
 use crate::gpu_utils::get_surface_configuration;
-use std::sync::Arc;
 use egui_wgpu::wgpu;
+use std::sync::Arc;
 use wgpu::{Instance, Surface, SurfaceConfiguration};
-use winit::dpi::Size;
+use winit::dpi::{PhysicalPosition, Position, Size};
 use winit::event_loop::EventLoop;
 use winit::window::{Window, WindowAttributes};
-use crate::gpu::GPUCtx;
 
 pub struct OSWindow {
     pub window: Arc<Window>,
@@ -19,7 +19,17 @@ impl OSWindow {
             .with_inner_size(size)
             .with_title(&"imgui-wgpu".to_string());
 
-        let window = event_loop.create_window(window_attrs).expect("Failed to create window");
+        let window = event_loop
+            .create_window(window_attrs)
+            .expect("Failed to create window");
+
+        if let Some(display) = window.primary_monitor() {
+            let position = display.position();
+
+            window.set_outer_position(Position::Physical(PhysicalPosition::new(
+                position.x, position.y,
+            )));
+        }
 
         let window = Arc::new(window);
         let surface = instance.create_surface(window.clone()).unwrap();
@@ -35,7 +45,8 @@ impl OSWindow {
     }
 
     pub fn init_configuration(&self, ctx: &GPUCtx) {
-        self.surface.configure(&ctx.device, &self.surface_configuration);
+        self.surface
+            .configure(&ctx.device, &self.surface_configuration);
     }
 
     pub fn re_configure(&mut self, ctx: &GPUCtx) {

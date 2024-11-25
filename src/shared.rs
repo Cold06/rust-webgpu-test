@@ -48,4 +48,8 @@ impl<T> Shared<T> {
     pub fn with<R, F: FnOnce(&mut T) -> R>(&self, u: F) -> R {
         u(&mut *self.borrow_mut())
     }
+
+    pub fn with_ref<R, F: FnOnce(&T) -> R>(&self, u: F) -> R {
+        u(&*self.borrow())
+    }
 }

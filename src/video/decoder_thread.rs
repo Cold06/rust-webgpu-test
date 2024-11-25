@@ -14,6 +14,7 @@ use super::{InitData, SeekCommand};
 #[derive(Debug)]
 pub enum PipelineEvent<T> {
     Data(T),
+    SeekAck,
     EOS,
 }
 
@@ -132,7 +133,7 @@ pub fn run_decoder_thread(
         init_result_sender
             .send(Ok(InitData {
                 fps: avg_frame_rate.into(),
-                total_duration,
+                total_duration: Duration::from_secs_f64(total_duration),
             }))
             .unwrap();
 
@@ -187,6 +188,10 @@ pub fn run_decoder_thread(
                         if let Ok(command) = command_receiver.try_recv() {
                             match command {
                                 SeekCommand::Seek(value) => {
+                                    if frame_sender.send(PipelineEvent::SeekAck).is_err() {
+                                        return;
+                                    }
+
                                     seek_to = Some(
                                         (stream.duration() as f64 * 62.29626645645534 * value)
                                             .round() as i64,
@@ -200,7 +205,7 @@ pub fn run_decoder_thread(
                     }
 
                     if let Some(seek_to) = seek_to.take() {
-                        let seek_range = (seek_to - 1000000)..(seek_to + 1000000);
+                        let seek_range = ..seek_to;
                         ictx.seek(seek_to, seek_range).unwrap();
                     }
 

@@ -936,6 +936,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a5d9305ccc6942a704f4335694ecd3de2ea531b114ac2d51f5f843750787a92f"
 
 [[package]]
+name = "fancy-duration"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3ae60718ae501dca9d27fd0e322683c86a95a1a01fac1807aa2f9b035cc0882"
+dependencies = [
+ "anyhow",
+ "lazy_static",
+ "regex",
+]
+
+[[package]]
 name = "fancy-regex"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2250,6 +2261,7 @@ dependencies = [
  "egui_extras",
  "enum_dispatch",
  "env_logger",
+ "fancy-duration",
  "ffmpeg-next",
  "glam",
  "mp4",
