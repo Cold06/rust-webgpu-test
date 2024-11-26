@@ -35,7 +35,7 @@ use crate::js::VM;
 use crate::video::FrameData;
 use bytemuck::{Pod, Zeroable};
 use egui::load::SizedTexture;
-use egui::{ImageSource, ProgressBar, Slider};
+use egui::{Event, ImageSource, ProgressBar, Slider};
 use egui_dock::{DockArea, DockState, NodeIndex, Style, SurfaceIndex};
 use egui_wgpu::wgpu::FilterMode;
 use egui_wgpu::{wgpu, ScreenDescriptor};
@@ -43,6 +43,7 @@ use fancy_duration::FancyDuration;
 use frontend::{TabView, WorldView};
 use fs_utils::get_random_file_from_directory;
 use winit::application::ApplicationHandler;
+use winit::event::DeviceEvent;
 use winit::event_loop::ActiveEventLoop;
 
 use glam::*;
@@ -77,7 +78,8 @@ fn fps(frame_duration: Duration) -> f64 {
 
 struct ApplicationHack {
     os_window: Shared<OSWindow>,
-    boxed_fn: Box<dyn FnMut(&ActiveEventLoop, WindowId, WindowEvent)>,
+    boxed_fn: Box<dyn FnMut(&ActiveEventLoop, WindowId, WindowEvent, Option<(f64, f64)>)>,
+    option: Option<(f64, f64)>,
 }
 
 impl ApplicationHack {
@@ -160,7 +162,7 @@ impl ApplicationHack {
         let scale_factor = 1.0;
         let mut focused = false;
         let mut last_frame = Instant::now();
-        let mut use_secondary_camera = false;
+        let mut use_secondary_camera = true;
 
         let mut render_passes: Vec<WeakShared<WorldView>> = vec![];
         let mut egui_passes: Vec<WeakShared<WorldView>> = vec![];
@@ -219,7 +221,8 @@ impl ApplicationHack {
 
         Self {
             os_window: os_window.clone(),
-            boxed_fn: Box::new(move |event_loop, window_id, event| {
+            option: None,
+            boxed_fn: Box::new(move |event_loop, window_id, event, mouse_delta| {
                 puffin::profile_function!();
 
                 video_handle.tick();
@@ -230,10 +233,16 @@ impl ApplicationHack {
                             focused,
                             event.clone(),
                             &mut view.secondary_camera_controller,
+                            mouse_delta,
                         );
                     });
                 } else {
-                    process_camera_input(focused, event.clone(), &mut camera_controller);
+                    process_camera_input(
+                        focused,
+                        event.clone(),
+                        &mut camera_controller,
+                        mouse_delta,
+                    );
                 }
 
                 egui_renderer.handle_input(&os_window.borrow().window, &event);
@@ -266,19 +275,19 @@ impl ApplicationHack {
                             }
                         }
                     }
+
                     WindowEvent::MouseInput {
                         state: ElementState::Pressed,
                         button: winit::event::MouseButton::Left,
                         ..
                     } => {
-                        // if !egui_renderer.state.egui_ctx().is_pointer_over_area() {
-                        //     os_window
-                        //         .window
-                        //         .set_cursor_grab(CursorGrabMode::Locked)
-                        //         .unwrap();
-                        //     os_window.window.set_cursor_visible(false);
-                        //     focused = true;
-                        // }
+                        os_window
+                            .borrow_mut()
+                            .window
+                            .set_cursor_grab(CursorGrabMode::Locked)
+                            .unwrap();
+                        os_window.borrow_mut().window.set_cursor_visible(false);
+                        focused = true;
                     }
                     WindowEvent::RedrawRequested => {
                         puffin::GlobalProfiler::lock().new_frame();
@@ -639,7 +648,21 @@ impl ApplicationHandler for ApplicationHack {
         window_id: WindowId,
         event: WindowEvent,
     ) {
-        (self.boxed_fn)(event_loop, window_id, event);
+        (self.boxed_fn)(event_loop, window_id, event, self.option.take());
+    }
+
+    fn device_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        device_id: winit::event::DeviceId,
+        event: winit::event::DeviceEvent,
+    ) {
+        match event {
+            winit::event::DeviceEvent::MouseMotion { delta } => {
+                self.option = Some(delta);
+            }
+            _ => {}
+        }
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
