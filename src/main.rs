@@ -515,6 +515,19 @@ impl ApplicationHack {
                                     ui.add(Slider::new(&mut new_prog, 0.0..=1.0).show_value(false))
                                 });
 
+                                value.with(|v| {
+                                    ui.horizontal(|ui: &mut egui::Ui| {
+                                        let available_width = ui.available_width();
+
+                                        ui.spacing_mut().slider_width = available_width / 2.0;
+
+                                        ui.add(
+                                            Slider::new(&mut v.play_speed, 0.0..=10.0)
+                                                .show_value(true),
+                                        );
+                                    });
+                                });
+
                                 let mut seek_target = None;
 
                                 let current = value

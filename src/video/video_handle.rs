@@ -15,6 +15,8 @@ use crate::{
 
 use super::{Frame, PipelineEvent};
 
+const MAX_PLAY_SPEED_SCALAR: f32 = 10.0;
+
 pub enum SeekCommand {
     Stop,
     // Go +10 seconds
@@ -65,7 +67,7 @@ pub struct VideoHandle {
     close_thread: Arc<AtomicBool>,
     pub total_duration: Duration,
     pub progress: f64,
-    pub play_speed: PlaySpeed,
+    pub play_speed: f32,
     pub dropped_frames: u64,
     play_state: PlayState,
     command_sender: LooseSender<SeekCommand>,
@@ -84,6 +86,12 @@ impl Drop for VideoHandle {
         self.close_thread
             .store(true, std::sync::atomic::Ordering::Relaxed);
     }
+}
+
+fn scale_duration(duration: Duration, scale: f32) -> Duration {
+    let nanos = duration.as_secs_f32() * scale;
+
+    Duration::from_secs_f32(nanos)
 }
 
 impl VideoHandle {
@@ -122,7 +130,7 @@ impl VideoHandle {
                 total_duration: data.total_duration,
                 progress: 0.0,
                 play_state: PlayState::Playing,
-                play_speed: PlaySpeed::Normal,
+                play_speed: 1.0,
                 command_sender,
                 last_update: Instant::now(),
                 yuv_frame_receiver,
@@ -310,7 +318,7 @@ impl Shared<VideoHandle> {
             let now = Instant::now();
             let delta = now - this.last_update;
             this.last_update = now;
-            this.current_timestamp += delta;
+            this.current_timestamp += scale_duration(delta, this.play_speed);
 
             // Frame dropping is being expensive, move it to the decoder thread thread
 
@@ -324,7 +332,7 @@ impl Shared<VideoHandle> {
                 }
 
                 // Otherwise, the current frame sould be enqueued
-                // We will check it again next iteration, until we 
+                // We will check it again next iteration, until we
                 // find a valid frame
 
                 let queued_frame = this.next_frame.take();
